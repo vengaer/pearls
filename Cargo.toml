@@ -1,0 +1,10 @@
+[package]
+name = "pearls"
+version = "0.1.0"
+authors = ["Vilhelm Engström <vilhelm.engstrom@tuta.io>"]
+edition = "2018"
+
+[dependencies]
+cv = { git = "https://github.com/nebgnahz/cv-rs.git" }
+failure="*"
+num="*"
