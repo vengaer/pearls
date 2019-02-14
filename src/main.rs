@@ -7,11 +7,17 @@ use imgen::core::{Image, Scalar, Show, WindowFlag, highgui_named_window};
 use imgen::color::SampleSpace;
 
 fn main() {
-    let img = Image::from_file("/home/vilhelm/repos/rust/pearls/images/test_image.jpg");
-
+    
+    let img = Image::from_file("/home/vilhelm/repos/rust/pearls/images/test_image.jpg").unwrap();
     highgui_named_window("Display window", WindowFlag::Normal).unwrap();
     img.show("Display window", 0).expect("Could not display window");
 
+    //let sub_img = img.subsection(0..100, 0..200).unwrap();
+    //sub_img.show("Display window", 0).expect("Could not display window");
+
+    //let means = img.lab_means();
+
+    /*
     let _ = Command::new("pause").status();
     let space = SampleSpace::new(100);
     let img = Image::new(23, 23);
@@ -22,6 +28,7 @@ fn main() {
         img.show("Display window", 0).expect("Could not display window");
         let _ = Command::new("pause").status();
     }
+    */
     
 
 }

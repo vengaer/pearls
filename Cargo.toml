@@ -6,5 +6,4 @@ edition = "2018"
 
 [dependencies]
 cv = { git = "https://github.com/nebgnahz/cv-rs.git" }
-failure="*"
 num="*"

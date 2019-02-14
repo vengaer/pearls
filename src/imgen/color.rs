@@ -1,4 +1,30 @@
+use crate::imgen::error::Error;
 use cv::core::Scalar;
+use num::Float;
+
+#[derive(Debug)]
+pub struct Lab {
+    pub l: f32,
+    pub a: f32,
+    pub b: f32,
+}
+
+impl Lab {
+    pub fn new(l: f32, a: f32, b: f32) -> Lab {
+        Lab{ l, a, b }
+    }
+
+    pub fn from_arr<U: Float>(arr: &[U]) -> Result<Lab, Error> {
+        if arr.len() != 3 {
+            Err(Error::new("Length of array must be 3"))
+        }
+        else {
+            Ok(Lab{l: num::cast(arr[0]).unwrap(), 
+                   a: num::cast(arr[1]).unwrap(), 
+                   b: num::cast(arr[2]).unwrap()})
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum ChannelCombination {
@@ -64,6 +90,7 @@ impl ChannelCombination {
     }
 }
 
+#[allow(dead_code)]
 pub struct SampleSpace {
     pub colors: Vec<Scalar>,
 }
@@ -99,6 +126,7 @@ impl SampleSpace {
         space
     }
 
+    #[cfg(test)]
     pub fn debug(&self) {
         for col in &self.colors {
             println!("{:?}", col);
