@@ -12,6 +12,8 @@ pub enum ChannelCombination {
 }
 
 impl ChannelCombination {
+
+    #[allow(dead_code)]
     pub fn value(&self) -> i32 {
         match *self {
             ChannelCombination::R   => 0,
