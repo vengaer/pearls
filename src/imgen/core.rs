@@ -12,7 +12,7 @@ use std::f64::consts::PI;
 use std::iter::Iterator;
 use std::ops::Range;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Image {
     pub data: Mat,
 }
@@ -129,7 +129,7 @@ impl Image {
 
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PearlImage {
     pub image: Image,
     outer_radius: u32,
@@ -151,19 +151,6 @@ impl PearlImage {
         PearlImage{ image, outer_radius, inner_radius, color: fg_color }
     }
 
-    pub fn copy(template: &PearlImage) -> PearlImage {
-        let image = Image::new(template.image.data.rows as i32, template.image.data.cols as i32);
-
-        let outer_radius = image.data.rows as u32 / 2;
-        let inner_radius = image.data.rows as u32 / 4;
-
-        image.rectangle(image.data.rows, image.data.cols, Scalar::all(255));
-        image.circle(outer_radius as i32, template.color);
-        image.circle(inner_radius as i32, Scalar::all(255));
-
-        PearlImage{ image, outer_radius, inner_radius, color: template.color }
-    }
-
     pub fn customize(&self, new_radius: u32) {
         if new_radius >= self.outer_radius {
             return ();
@@ -181,8 +168,8 @@ impl PearlImage {
 #[derive(Debug)]
 enum SizeMod {
     NoOpt,
-    Smaller,
-    Larger
+    Shrinkage,
+    Enlargement
 }
 
 #[derive(Debug)]
@@ -242,7 +229,7 @@ impl<'a> ImageDistance<'a> {
             },
             _ => radius + step, /* Larger radius in allowed interval */
         };
-        /* If smaller radius would be <= 0, make step smaller and push radius inward */
+        /* If smaller radius would be <= 0, make step smaller and push radius outward */
         let smaller_radius = match radius {
             r if r < step  => {
                 step /= 2;
@@ -267,7 +254,8 @@ impl<'a> ImageDistance<'a> {
 
         /* If step is 1 and current Eab is better than the alternatives, stop early */
         if step == 1 && dist < srad_dist && dist < lrad_dist {
-            println!("Early stopping");
+            println!("Radius: {}, Step: {} ", radius, step);
+            println!("Early stop");
             return radius;
         }
 
@@ -279,25 +267,25 @@ impl<'a> ImageDistance<'a> {
         /* Larger radius gives smaller Eab, try even larger */
         if lrad_dist < srad_dist {
 
-            nmod = SizeMod::Larger;
+            nmod = SizeMod::Enlargement;
             nrad = larger_radius;
             ndist = lrad_dist;
 
             /* If the previous size mod shrunk the radius, halve the step */
             match prev {
-                SizeMod::Smaller => nstep = step / 2,
+                SizeMod::Shrinkage => nstep = step / 2,
                 _ => (),
             };
         }
         /* Smaller radius gives smaller Eab, try even smaller */
         else {
-            nmod = SizeMod::Smaller;
+            nmod = SizeMod::Shrinkage;
             nrad = smaller_radius;
             ndist = srad_dist;
 
             /* If the previous size mod enlarged the radius, halve the step */
             match prev {
-                SizeMod::Larger => nstep = step / 2,
+                SizeMod::Enlargement => nstep = step / 2,
                 _ => (),
             };
         }
@@ -314,7 +302,7 @@ impl<'a> ImageDistance<'a> {
         let cmp_means = ImageDistance::lab_means(&Image::from_mat(lab_cmp));
 
         /* Image to return (modifying self would ruin future comparisons) */
-        let mut img = PearlImage::copy(self.image);
+        let mut img = self.image.clone();
 
         /* Get optimal radius and modify image to return */
         let new_radius = ImageDistance::optimize_inner_radius_impl(&mut img, &cmp_means, self.image.inner_radius, step, 1000f32, SizeMod::NoOpt);
@@ -323,9 +311,7 @@ impl<'a> ImageDistance<'a> {
 
         img
     }
-
 }
-
 
 
 impl Image {
@@ -374,7 +360,6 @@ impl Image {
         }
 
         /* Make even multiple of section_size */
-                /* Make even multiple of section_size */
         let rem_x = self.data.cols as u32 % section_size.x;
         let rem_y = self.data.rows as u32 % section_size.y;
 
