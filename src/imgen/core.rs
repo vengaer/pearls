@@ -4,6 +4,7 @@ pub use cv::highgui::{Show, WindowFlag, highgui_named_window};
 use crate::imgen::color::SampleSpace;
 use crate::imgen::error::Error;
 use crate::imgen::math::{Point2u, Point3f, Size2u};
+use crate::imgen::raw;
 use cv::core::{CvType, LineType, Point2i, Rect, Size2i};
 use cv::imgcodecs::ImageReadMode;
 use cv::imgproc::{ColorConversion, InterpolationFlag};
@@ -39,6 +40,11 @@ impl Image {
         else {
             Ok(Image{data})
         }
+    }
+
+    #[allow(dead_code, unused_variables)]
+    pub fn to_file(&self, path: &str) -> Result<(), Error> {
+        raw::write(&path, &self.data)
     }
 
     pub fn from_mat(data: Mat) -> Image {
