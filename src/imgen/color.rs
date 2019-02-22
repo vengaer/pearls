@@ -1,4 +1,5 @@
 use cv::core::Scalar;
+use libc::c_int;
 
 #[derive(Debug)]
 pub enum ChannelCombination {
@@ -14,7 +15,7 @@ pub enum ChannelCombination {
 impl ChannelCombination {
 
     #[allow(dead_code)]
-    pub fn value(&self) -> i32 {
+    pub fn value(&self) -> c_int {
         match *self {
             ChannelCombination::R   => 0,
             ChannelCombination::G   => 1,
@@ -26,7 +27,7 @@ impl ChannelCombination {
         }
     }
 
-    pub fn from_i32(value: i32) -> ChannelCombination {
+    pub fn from_c_int(value: c_int) -> ChannelCombination {
         match value {
              0 => ChannelCombination::R,
              1 => ChannelCombination::G,
@@ -39,7 +40,7 @@ impl ChannelCombination {
         }
     }
 
-    pub fn to_scalar_with_intensity(&self, intensity: i32) -> Scalar {
+    pub fn to_scalar_with_intensity(&self, intensity: c_int) -> Scalar {
         match *self {
             ChannelCombination::R   => {
                 Scalar::new(0, 0, intensity, 255)
@@ -72,7 +73,7 @@ pub struct SampleSpace {
 }
 
 impl SampleSpace {
-    pub fn new(samples: i32) -> SampleSpace {
+    pub fn new(samples: c_int) -> SampleSpace {
         if samples < 7 {
             panic!("Too few color samples requested");
         }
@@ -95,7 +96,7 @@ impl SampleSpace {
             else {
                 intensity += intensity_step;
             }
-            space.colors.push(ChannelCombination::from_i32(channels)
+            space.colors.push(ChannelCombination::from_c_int(channels)
                               .to_scalar_with_intensity(intensity));
         }
 

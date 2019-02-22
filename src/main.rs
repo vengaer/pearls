@@ -11,7 +11,7 @@ fn main() {
     img.show("Display window", 0).expect("Could not display window");
     img.resize(200, 350);
     
-    let repr = img.reproduce(Size2u::new(4, 4), 40, Size2u::new(24, 24)).unwrap();
+    let repr = img.reproduce(Size2u::new(4, 4), 100, Size2u::new(24, 24)).unwrap();
     repr.show("Display window", 0).unwrap();
     repr.to_file("images/out.jpg").unwrap();
 }

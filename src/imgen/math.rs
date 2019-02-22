@@ -1,7 +1,6 @@
 use crate::imgen::error::Error;
 use num::Float;
 
-
 #[derive(Debug)]
 pub struct Point3f {
     pub x: f32,
@@ -55,5 +54,49 @@ pub struct Size2u {
 impl Size2u {
     pub fn new(x: u32, y: u32) -> Size2u {
         Size2u{ x, y }
+    }
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+pub struct DensityEstimate {
+    pub mean: f32,
+    pub sdev: f32,
+}
+
+impl DensityEstimate {
+    pub fn mean(data: &Vec<f32>) -> f32
+    {
+        let mut result = 0f32;
+        
+        for value in data {
+            result += value;
+        }
+        
+        result / data.len() as f32
+    }
+
+    fn sdev(data: &Vec<f32>, mean: &f32) -> f32 {
+        let mut sum = 0f32;
+
+        for value in data {
+            sum += (value - mean).powf(2.0);
+        }
+
+        (sum / (data.len() - 1) as f32).sqrt()
+    }
+
+
+    #[allow(dead_code)]
+    pub fn new(data: &Vec<f32>) -> DensityEstimate
+    { 
+        if data.len() == 0 {
+            panic!("Vector must have size > 0");
+        }
+
+        let mean = DensityEstimate::mean(&data);
+        let sdev = DensityEstimate::sdev(&data, &mean);
+        
+        DensityEstimate{ mean, sdev }
     }
 }

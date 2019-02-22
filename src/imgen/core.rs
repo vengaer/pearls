@@ -3,12 +3,13 @@ pub use cv::highgui::{Show, WindowFlag, highgui_named_window};
 
 use crate::imgen::color::SampleSpace;
 use crate::imgen::error::Error;
-use crate::imgen::math::{Point2u, Point3f, Size2u};
+use crate::imgen::math::{DensityEstimate, Point2u, Point3f, Size2u};
 use crate::imgen::raw;
 use cv::core::{CvType, LineType, Point2i, Rect, Size2i};
 use cv::imgcodecs::ImageReadMode;
 use cv::imgproc::{ColorConversion, InterpolationFlag};
 use cv::mat::Mat;
+use libc::c_int;
 use std::f64::consts::PI;
 use std::iter::Iterator;
 use std::ops::Range;
@@ -19,8 +20,8 @@ pub struct Image {
 }
 
 impl Image {
-    pub fn new(rows: i32, cols: i32) -> Image {
-        let data = Mat::with_size(rows, cols, CvType::Cv8UC3 as i32);
+    pub fn new(rows: c_int, cols: c_int) -> Image {
+        let data = Mat::with_size(rows, cols, CvType::Cv8UC3 as c_int);
         Image{ data }
     }
 
@@ -42,7 +43,6 @@ impl Image {
         }
     }
 
-    #[allow(dead_code, unused_variables)]
     pub fn to_file(&self, path: &str) -> Result<(), Error> {
         raw::write(&path, &self.data)
     }
@@ -51,19 +51,19 @@ impl Image {
         Image{ data }
     }
 
-    pub fn rectangle(&self, height: i32, width: i32, color: Scalar) {
+    pub fn rectangle(&self, height: c_int, width: c_int, color: Scalar) {
         let rect = Rect::new(0, 0, width, height);
 
         self.data.rectangle_custom(rect, color, 2*height, LineType::Filled);
     }
 
-    pub fn rectangle_custom(&self, height: i32, width: i32, first_row_nr: i32, first_col_nr: i32, color: Scalar) {
+    pub fn rectangle_custom(&self, height: c_int, width: c_int, first_row_nr: c_int, first_col_nr: c_int, color: Scalar) {
         let rect = Rect::new(first_col_nr, first_row_nr, width, height);
 
         self.data.rectangle_custom(rect, color, -20, LineType::Line8);
     }
 
-    pub fn circle(&self, radius: i32, color: Scalar) {
+    pub fn circle(&self, radius: c_int, color: Scalar) {
         let center = Point2i::new(self.data.cols / 2, self.data.rows / 2);
 
         self.data.ellipse_custom(center, 
@@ -77,8 +77,8 @@ impl Image {
                                  0);
     }
 
-    pub fn circle_custom(&self, radius: i32, color: Scalar, center: &Point2u) {
-        let center = Point2i::new(center.x as i32, center.y as i32);
+    pub fn circle_custom(&self, radius: c_int, color: Scalar, center: &Point2u) {
+        let center = Point2i::new(center.x as c_int, center.y as c_int);
 
         self.data.ellipse_custom(center, 
                                  Size2i::new(0,0),
@@ -92,19 +92,19 @@ impl Image {
 
     }
 
-    pub fn rows(&self) -> i32 {
+    pub fn rows(&self) -> c_int {
         self.data.rows
     }
 
-    pub fn cols(&self) -> i32 {
+    pub fn cols(&self) -> c_int {
         self.data.cols
     }
 
-    pub fn at(&self, x_idx: i32, y_idx: i32, z_idx: i32) -> u8 {
-        self.data.at3::<u8>(x_idx, y_idx, z_idx)
+    pub fn at(&self, x_idx: c_int, y_idx: c_int, z_idx: c_int) -> u8 {
+        self.data.at3::<u8>(y_idx, x_idx, z_idx)
     }
 
-    pub fn show(&self, name: &str, delay: i32) -> Result<(), Error> {
+    pub fn show(&self, name: &str, delay: c_int) -> Result<(), Error> {
         match self.data.show(name, delay) {
             Ok(()) => Ok(()),
             Err(_error) => {
@@ -114,7 +114,7 @@ impl Image {
     }
 
 
-    pub fn subsection(&self, x_range: Range<i32>, y_range: Range<i32>) -> Result<Image, Error> {
+    pub fn subsection(&self, x_range: Range<c_int>, y_range: Range<c_int>) -> Result<Image, Error> {
         if y_range.end <= y_range.start || x_range.end <= x_range.start {
             return Err(Error::new("Range must be of length >= 1 and increasing"))
         }
@@ -146,13 +146,13 @@ pub struct PearlImage {
 impl PearlImage {
 
     pub fn new(fg_color: Scalar, image_dims: &Size2u) -> PearlImage {
-        let image = Image::new(image_dims.y as i32, image_dims.x as i32);
+        let image = Image::new(image_dims.y as c_int, image_dims.x as c_int);
 
         let outer_radius = image.data.rows as u32 / 2;
         let inner_radius = image.data.rows as u32 / 4;
         image.rectangle(image.data.rows, image.data.cols, Scalar::all(255));
-        image.circle(outer_radius as i32, fg_color);
-        image.circle(inner_radius as i32, Scalar::all(255));
+        image.circle(outer_radius as c_int, fg_color);
+        image.circle(inner_radius as c_int, Scalar::all(255));
 
         PearlImage{ image, outer_radius, inner_radius, color: fg_color }
     }
@@ -163,10 +163,10 @@ impl PearlImage {
         }
 
         if new_radius < self.inner_radius {
-            self.image.circle(self.outer_radius as i32, self.color);
+            self.image.circle(self.outer_radius as c_int, self.color);
         }
         if new_radius != 0 {
-            self.image.circle(new_radius as i32, Scalar::all(255));
+            self.image.circle(new_radius as c_int, Scalar::all(255));
         }
     }
 }
@@ -204,7 +204,7 @@ impl<'a> ImageDistance<'a> {
         for c in 0usize..3 {
             for y in 0..lab_img.data.rows {
                 for x in 0..lab_img.data.cols {
-                    result += lab_img.at(y, x, c as i32) as f64;
+                    result += lab_img.at(x, y, c as c_int) as f64;
                 }
             }
             means[c] = result / pixels as f64;
@@ -322,27 +322,101 @@ impl<'a> ImageDistance<'a> {
 
 impl Image {
     pub fn resize(&mut self, rows: u32, cols: u32) {
-        self.data = self.data.resize_to(Size2i::new(cols as i32, rows as i32), 
+        self.data = self.data.resize_to(Size2i::new(cols as c_int, rows as c_int), 
                                         InterpolationFlag::InterLinear);
     }
 
     pub fn replace_section(&self, lower_bound: Point2u, new_section: &PearlImage) {
         self.rectangle_custom(new_section.image.data.rows,
                               new_section.image.data.cols,
-                              lower_bound.y as i32,
-                              lower_bound.x as i32,
+                              lower_bound.y as c_int,
+                              lower_bound.x as c_int,
                               Scalar::new(255, 255, 255, 255));
 
         let center = Point2u::new(lower_bound.x + new_section.image.data.cols as u32 / 2,
                                   lower_bound.y + new_section.image.data.rows as u32 / 2);
 
-        self.circle_custom(new_section.outer_radius as i32, 
+        self.circle_custom(new_section.outer_radius as c_int, 
                            new_section.color,
                            &center);
-        self.circle_custom(new_section.inner_radius as i32,
+        self.circle_custom(new_section.inner_radius as c_int,
                            Scalar::new(255, 255, 255, 255),
                            &center);
     }
+
+    /* Compute Lab densities for self */
+    fn lab_densities(&self) -> [DensityEstimate; 3] {
+        let size = self.data.rows * self.data.cols;
+        let mut l: Vec<f32> = Vec::with_capacity(size as usize);
+        let mut a: Vec<f32> = Vec::with_capacity(size as usize);
+        let mut b: Vec<f32> = Vec::with_capacity(size as usize);
+
+        for y in 0..self.data.rows as usize {
+            for x in 0..self.data.cols as usize {
+                l.push(self.data.at3::<u8>(y as c_int, x as c_int, 0) as f32);
+                a.push(self.data.at3::<u8>(y as c_int, x as c_int, 1) as f32);
+                b.push(self.data.at3::<u8>(y as c_int, x as c_int, 2) as f32);
+            }
+        }
+
+        let l_density = DensityEstimate::new(&l);
+        let a_density = DensityEstimate::new(&a);
+        let b_density = DensityEstimate::new(&b);
+
+        [l_density, a_density, b_density]
+    }
+
+    #[allow(dead_code)]
+    fn filter(&self, pearls: Vec<PearlImage>) -> Vec<PearlImage> {
+        if pearls.len() == 0 {
+            panic!("Vector is empty");
+        }
+        /* All pearls assumed to have same size */
+        let rows = pearls[0].image.data.rows as usize;
+        let cols = pearls[0].image.data.cols as usize;
+
+        let densities = self.lab_densities();
+
+        /* TODO: sdev_factor should depend on the image */
+        let sdev_factor = 2.5;
+
+        let l_max = densities[0].mean + sdev_factor * densities[0].sdev;
+        let l_min = densities[0].mean - sdev_factor * densities[0].sdev;
+        let a_max = densities[1].mean + sdev_factor * densities[1].sdev;
+        let a_min = densities[1].mean - sdev_factor * densities[1].sdev;
+        let b_max = densities[1].mean + sdev_factor * densities[1].sdev;
+        let b_min = densities[1].mean - sdev_factor * densities[1].sdev;
+
+        let mut filtered: Vec<PearlImage> = Vec::with_capacity(pearls.len());
+
+        let size = rows * cols;
+        let mut l: Vec<f32> = Vec::with_capacity(size);
+        let mut a: Vec<f32> = Vec::with_capacity(size);
+        let mut b: Vec<f32> = Vec::with_capacity(size);
+
+        for img in &pearls {
+            for y in 0..img.image.data.rows as usize {
+                for x in 0..img.image.data.cols as usize {
+                    l.push(img.image.data.at3::<u8>(y as c_int, x as c_int, 0) as f32);
+                    a.push(img.image.data.at3::<u8>(y as c_int, x as c_int, 1) as f32);
+                    b.push(img.image.data.at3::<u8>(y as c_int, x as c_int, 2) as f32);
+                }
+            }
+
+            let l_mean = DensityEstimate::mean(&l);
+            let a_mean = DensityEstimate::mean(&a);
+            let b_mean = DensityEstimate::mean(&b);
+
+            if l_mean > l_min && l_mean < l_max &&
+               a_mean > a_min && a_mean < a_max &&
+               b_mean > b_min && b_mean < b_max {
+                filtered.push(img.clone());
+            }
+        }
+
+        filtered
+    }
+
 
 
     pub fn reproduce(&mut self, section_size: Size2u, n_images: u32, image_size: Size2u) -> Result<Image, Error> {
@@ -359,27 +433,28 @@ impl Image {
 
         /* Generate sub images */
         let mut pearls: Vec<PearlImage> = Vec::with_capacity(n_images as usize);
-        let sample_space = SampleSpace::new(n_images as i32);
+        let sample_space = SampleSpace::new(n_images as c_int);
 
         for color in sample_space {
             pearls.push(PearlImage::new(color, &image_size));
         }
+
+        let pearls = self.filter(pearls);
 
         /* Make even multiple of section_size */
         let rem_x = self.data.cols as u32 % section_size.x;
         let rem_y = self.data.rows as u32 % section_size.y;
 
         self.resize(self.data.rows as u32 - rem_y, 
-                         self.data.cols as u32 - rem_x);
+                    self.data.cols as u32 - rem_x);
 
         /* Factors the image will be upscaled with */
         let x_upscale = image_size.x / section_size.x;
         let y_upscale = image_size.y / section_size.y;
 
-        let result = Image::new(self.data.rows * y_upscale as i32,
-                                self.data.cols * x_upscale as i32);;
+        let result = Image::new(self.data.rows * y_upscale as c_int,
+                                self.data.cols * x_upscale as c_int);
 
-        /* Will hold best match for the section (rubbish atm) */
         let mut opt_img = ImageDistance::mean(&Image::new(1,1), &pearls[0]);
         opt_img.force_dist(999999999f64);
 
@@ -394,10 +469,10 @@ impl Image {
                 println!("Processing: {}/{}", progress, iterations);
 
                 /* Select sub image */
-                let sub_img = self.subsection(x as i32 / x_upscale as i32
-                                              ..(x as i32 + image_size.x as i32) / x_upscale as i32, 
-                                              y as i32 / x_upscale as i32
-                                              ..(y as i32 + image_size.y as i32) / y_upscale as i32)
+                let sub_img = self.subsection(x as c_int / x_upscale as c_int
+                                              ..(x as c_int + image_size.x as c_int) / x_upscale as c_int, 
+                                              y as c_int / x_upscale as c_int
+                                              ..(y as c_int + image_size.y as c_int) / y_upscale as c_int)
                     .expect("Subsection boundaries out of range");
                 
                 /* Check all generated pearls agains sub image */
