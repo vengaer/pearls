@@ -34,8 +34,6 @@ extern "C"{
 		try {
 			if(cv::imwrite(path, img))
 				return 0;
-			
-			return -1;
 		}
 		catch(...) { }
 	

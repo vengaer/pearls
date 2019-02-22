@@ -13,8 +13,8 @@ extern "C" {
 pub fn write(path: &str, data: &Mat) -> Result<(), Error> {
     let outcome: c_int;
     let path = CString::new(path).expect("Invalid string conversion");
-    let rows = data.rows as c_int;
-    let cols = data.cols as c_int;
+    let rows = data.rows;
+    let cols = data.cols;
     let im_type = CvType::Cv8UC3 as c_int;
 
     unsafe {

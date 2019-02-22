@@ -5,6 +5,9 @@ authors = ["Vilhelm Engström <vilhelm.engstrom@tuta.io>"]
 edition = "2018"
 build = "build.rs"
 
+[build-dependencies]
+cc="*"
+
 [dependencies]
 cv = { git = "https://github.com/nebgnahz/cv-rs.git" }
 num="*"
