@@ -21,7 +21,7 @@ extern "C"{
 
 		int const channels = 3;
 
-		Mat img = Mat::zeros(rows, cols, CV_8UC3);
+		Mat img = Mat::zeros(rows, cols, type);
 		
 		for(int y = 0; y < rows; y++) {
 			for(int x = 0; x < cols; x++) {
