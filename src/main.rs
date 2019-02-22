@@ -10,8 +10,9 @@ fn main() {
     let mut img = Image::from_file("images/test_image.jpg").unwrap();
     img.show("Display window", 0).expect("Could not display window");
     img.resize(200, 350);
+    img.to_file("images/tout.jpg").unwrap();
     
-    let repr = img.reproduce(Size2u::new(4, 4), 100, Size2u::new(24, 24)).unwrap();
-    repr.show("Display window", 0).unwrap();
-    repr.to_file("images/out.jpg").unwrap();
+    //let repr = img.reproduce(Size2u::new(4, 4), 100, Size2u::new(24, 24)).unwrap();
+    //repr.show("Display window", 0).unwrap();
+    //repr.to_file("images/out.jpg").unwrap();
 }
