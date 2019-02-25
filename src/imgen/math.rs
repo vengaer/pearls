@@ -1,5 +1,6 @@
 use crate::imgen::error::Error;
 use num::Float;
+use std::f32;
 
 #[derive(Debug)]
 pub struct Point3f {
@@ -99,4 +100,11 @@ impl DensityEstimate {
         
         DensityEstimate{ mean, sdev }
     }
+}
+
+#[allow(dead_code)]
+pub fn approx_eq(a: f32, b: f32) -> bool {
+    let diff = (a-b).abs();
+
+    diff < 0.03
 }

@@ -1,3 +1,4 @@
+pub use crate::imgen::raw::SSIM;
 pub use cv::core::Scalar;
 pub use cv::highgui::{Show, WindowFlag, highgui_named_window};
 
@@ -13,6 +14,7 @@ use libc::c_int;
 use std::f64::consts::PI;
 use std::iter::Iterator;
 use std::ops::Range;
+
 
 #[derive(Debug, Clone)]
 pub struct Image {
@@ -43,6 +45,7 @@ impl Image {
         }
     }
 
+    #[allow(dead_code)]
     pub fn to_file(&self, path: &str) -> Result<(), Error> {
         raw::write(&path, &self.data)
     }
@@ -104,16 +107,6 @@ impl Image {
         self.data.at3::<u8>(y_idx, x_idx, z_idx)
     }
 
-    pub fn show(&self, name: &str, delay: c_int) -> Result<(), Error> {
-        match self.data.show(name, delay) {
-            Ok(()) => Ok(()),
-            Err(_error) => {
-                Err(Error::new("Could not show image"))
-            },
-        }
-    }
-
-
     pub fn subsection(&self, x_range: Range<c_int>, y_range: Range<c_int>) -> Result<Image, Error> {
         if y_range.end <= y_range.start || x_range.end <= x_range.start {
             return Err(Error::new("Range must be of length >= 1 and increasing"))
@@ -136,7 +129,7 @@ impl Image {
 }
 
 #[derive(Debug, Clone)]
-pub struct PearlImage {
+struct PearlImage {
     pub image: Image,
     outer_radius: u32,
     inner_radius: u32,
@@ -174,8 +167,8 @@ impl PearlImage {
 #[derive(Debug)]
 enum SizeMod {
     NoOpt,
-    Shrinkage,
-    Enlargement
+    Decrease,
+    Increase
 }
 
 #[derive(Debug)]
@@ -273,25 +266,25 @@ impl<'a> ImageDistance<'a> {
         /* Larger radius gives smaller Eab, try even larger */
         if lrad_dist < srad_dist {
 
-            nmod = SizeMod::Enlargement;
+            nmod = SizeMod::Increase;
             nrad = larger_radius;
             ndist = lrad_dist;
 
             /* If the previous size mod shrunk the radius, halve the step */
             match prev {
-                SizeMod::Shrinkage => nstep = step / 2,
+                SizeMod::Decrease => nstep = step / 2,
                 _ => (),
             };
         }
         /* Smaller radius gives smaller Eab, try even smaller */
         else {
-            nmod = SizeMod::Shrinkage;
+            nmod = SizeMod::Decrease;
             nrad = smaller_radius;
             ndist = srad_dist;
 
             /* If the previous size mod enlarged the radius, halve the step */
             match prev {
-                SizeMod::Enlargement => nstep = step / 2,
+                SizeMod::Increase => nstep = step / 2,
                 _ => (),
             };
         }
@@ -300,7 +293,7 @@ impl<'a> ImageDistance<'a> {
         ImageDistance::optimize_inner_radius_impl(&mut img, cmp_means, nrad, nstep, ndist, nmod)
     }
 
-    pub fn optimize_inner_radius(&self, cmp: &Image) -> PearlImage{
+    pub fn optimize_inner_radius(&self, cmp: &Image) -> PearlImage {
         let step = self.image.inner_radius / 2;
 
         /* Precompute Lab means for image to compare with */
@@ -323,10 +316,20 @@ impl<'a> ImageDistance<'a> {
 impl Image {
     pub fn resize(&mut self, rows: u32, cols: u32) {
         self.data = self.data.resize_to(Size2i::new(cols as c_int, rows as c_int), 
-                                        InterpolationFlag::InterLinear);
+                                        InterpolationFlag::InterLanczos4);
     }
 
-    pub fn replace_section(&self, lower_bound: Point2u, new_section: &PearlImage) {
+    #[allow(dead_code)]
+    pub fn resize_by(&mut self, row_fact: f32, col_fact: f32) {
+        let nrows = self.data.rows as f32 * row_fact;
+        let ncols = self.data.cols as f32 * col_fact;
+
+        self.data = self.data.resize_to(Size2i::new(ncols as c_int, nrows as c_int),
+                                        InterpolationFlag::InterLanczos4);
+
+    }
+
+    fn replace_section(&self, lower_bound: Point2u, new_section: &PearlImage) {
         self.rectangle_custom(new_section.image.data.rows,
                               new_section.image.data.cols,
                               lower_bound.y as c_int,
@@ -367,7 +370,7 @@ impl Image {
     }
 
     #[allow(dead_code)]
-    fn filter(&self, pearls: Vec<PearlImage>) -> Vec<PearlImage> {
+    fn filter(&self, pearls: &mut Vec<PearlImage>) {
         if pearls.len() == 0 {
             panic!("Vector is empty");
         }
@@ -387,19 +390,18 @@ impl Image {
         let b_max = densities[1].mean + sdev_factor * densities[1].sdev;
         let b_min = densities[1].mean - sdev_factor * densities[1].sdev;
 
-        let mut filtered: Vec<PearlImage> = Vec::with_capacity(pearls.len());
 
         let size = rows * cols;
         let mut l: Vec<f32> = Vec::with_capacity(size);
         let mut a: Vec<f32> = Vec::with_capacity(size);
         let mut b: Vec<f32> = Vec::with_capacity(size);
 
-        for img in &pearls {
-            for y in 0..img.image.data.rows as usize {
-                for x in 0..img.image.data.cols as usize {
-                    l.push(img.image.data.at3::<u8>(y as c_int, x as c_int, 0) as f32);
-                    a.push(img.image.data.at3::<u8>(y as c_int, x as c_int, 1) as f32);
-                    b.push(img.image.data.at3::<u8>(y as c_int, x as c_int, 2) as f32);
+        pearls.retain(|p| {
+            for y in 0..p.image.data.rows as usize {
+                for x in 0..p.image.data.cols as usize {
+                    l.push(p.image.data.at3::<u8>(y as c_int, x as c_int, 0) as f32);
+                    a.push(p.image.data.at3::<u8>(y as c_int, x as c_int, 1) as f32);
+                    b.push(p.image.data.at3::<u8>(y as c_int, x as c_int, 2) as f32);
                 }
             }
 
@@ -407,14 +409,10 @@ impl Image {
             let a_mean = DensityEstimate::mean(&a);
             let b_mean = DensityEstimate::mean(&b);
 
-            if l_mean > l_min && l_mean < l_max &&
-               a_mean > a_min && a_mean < a_max &&
-               b_mean > b_min && b_mean < b_max {
-                filtered.push(img.clone());
-            }
-        }
-
-        filtered
+            l_mean > l_min && l_mean < l_max &&
+            a_mean > a_min && a_mean < a_max &&
+            b_mean > b_min && b_mean < b_max
+        });
     }
 
 
@@ -430,6 +428,9 @@ impl Image {
         else if n_images > 500 {
             return Err(Error::new("Too many images requested"));
         }
+        else if image_size.x != image_size.y {
+            return Err(Error::new("Replacement images must be nxn"))
+        }
 
         /* Generate sub images */
         let mut pearls: Vec<PearlImage> = Vec::with_capacity(n_images as usize);
@@ -439,7 +440,7 @@ impl Image {
             pearls.push(PearlImage::new(color, &image_size));
         }
 
-        let pearls = self.filter(pearls);
+        self.filter(&mut pearls);
 
         /* Make even multiple of section_size */
         let rem_x = self.data.cols as u32 % section_size.x;
@@ -486,7 +487,7 @@ impl Image {
                 println!("Eab: {}", opt_img.dist);
 
                 /* Pearl with inner radius that minimizes Eab */
-                let  piece = opt_img.optimize_inner_radius(&sub_img);
+                let piece = opt_img.optimize_inner_radius(&sub_img);
 
                 /* Add to image */
                 result.replace_section(Point2u::new(x as u32, y as u32), 
@@ -500,6 +501,43 @@ impl Image {
         Ok(result)
     }
 
+    #[allow(dead_code)]
+    pub fn ssim(&self, other: &Image) -> Result<SSIM, Error> {
+        if self.data.rows == other.data.rows &&
+           self.data.cols == other.data.cols {
+            return raw::ssim(&self.data, &other.data);
+        }
+
+        let mut other = other.clone();
+        other.resize(self.data.rows as u32, self.data.cols as u32);
+        raw::ssim(&self.data, &other.data)
+    }
+
 }
 
 
+
+#[derive(Debug)]
+#[allow(dead_code)]
+pub struct Window {
+    title: String,
+}
+
+impl Window {
+    pub fn new(title: &str) -> Window {
+        highgui_named_window(&title, WindowFlag::Normal).unwrap();
+
+        let title = title.to_string();
+        Window{ title }
+    }
+
+    #[allow(dead_code)]
+    pub fn show(&self, image: &Image) -> Result<(), Error> {
+        match image.data.show(&self.title, 0) {
+            Ok(()) => Ok(()),
+            Err(_) => {
+                Err(Error::new("Could not show image"))
+            },
+        }
+    }
+}

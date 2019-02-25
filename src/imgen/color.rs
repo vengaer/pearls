@@ -102,13 +102,6 @@ impl SampleSpace {
 
         space
     }
-
-    #[cfg(test)]
-    pub fn debug(&self) {
-        for col in &self.colors {
-            println!("{:?}", col);
-        }
-    }
 }
 
 impl IntoIterator for SampleSpace {
