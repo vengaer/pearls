@@ -13,20 +13,6 @@ pub enum ChannelCombination {
 }
 
 impl ChannelCombination {
-
-    #[allow(dead_code)]
-    pub fn value(&self) -> c_int {
-        match *self {
-            ChannelCombination::R   => 0,
-            ChannelCombination::G   => 1,
-            ChannelCombination::B   => 2,
-            ChannelCombination::RG  => 3,
-            ChannelCombination::RB  => 4,
-            ChannelCombination::GB  => 5,
-            ChannelCombination::RGB => 6,
-        }
-    }
-
     pub fn from_c_int(value: c_int) -> ChannelCombination {
         match value {
              0 => ChannelCombination::R,
