@@ -2,6 +2,6 @@ extern crate cc;
 
 fn main() {
     cc::Build::new()
-        .file("src/bindings.cc")
-        .compile("bindings");
+        .file("src/ffis.cc")
+        .compile("ffis");
 }
