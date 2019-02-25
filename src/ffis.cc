@@ -27,6 +27,7 @@ int cv_write(char const* path, unsigned char const* data, int rows, int cols, in
 	return -1;
 }
 
+/* Taken from the OpenCV documentation */
 SSIM cv_ssim(unsigned char const* im1_data, int im1_rows, int im1_cols, int im1_type, 
 		     unsigned char const* im2_data, int im2_rows, int im2_cols, int im2_type) {
 	static_assert(std::numeric_limits<unsigned char>::digits == 8, "Unsuitable byte size");
@@ -79,7 +80,7 @@ SSIM cv_ssim(unsigned char const* im1_data, int im1_rows, int im1_cols, int im1_
 	GaussianBlur(i1_i2, sigma12, Size(11, 11), 1.5);
 	sigma12 -= mu1_mu2;
 
-	/* Per formula */
+	/* Formula */
 	Mat t1, t2, t3;
 
 	t1 = 2 * mu1_mu2 + c1;
