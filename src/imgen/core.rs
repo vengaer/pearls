@@ -17,6 +17,7 @@ use std::ops::Range;
 
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Image {
     pub data: Mat,
 }
@@ -27,6 +28,7 @@ impl Image {
         Image{ data }
     }
 
+    #[allow(dead_code)]
     pub fn from_file(path: &str) -> Result<Image, Error> {
         let data = Mat::from_path(path, ImageReadMode::Color);
 
@@ -417,7 +419,7 @@ impl Image {
         let mut a: Vec<f32> = Vec::with_capacity(size);
         let mut b: Vec<f32> = Vec::with_capacity(size);
 
-        /* Remove irrelevant pearls */
+        /* Remove less relevant pearls */
         pearls.retain(|p| {
             l.clear();
             a.clear();
