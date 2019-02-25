@@ -106,5 +106,5 @@ impl DensityEstimate {
 pub fn approx_eq(a: f32, b: f32) -> bool {
     let diff = (a-b).abs();
 
-    diff < 0.03
+    diff < 0.007
 }

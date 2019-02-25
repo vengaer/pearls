@@ -1,16 +1,16 @@
 pub use crate::imgen::raw::SSIM;
-pub use cv::core::Scalar;
-pub use cv::highgui::{Show, WindowFlag, highgui_named_window};
 
 use crate::imgen::color::SampleSpace;
 use crate::imgen::error::Error;
 use crate::imgen::math::{DensityEstimate, Point2u, Point3f, Size2u};
 use crate::imgen::raw;
-use cv::core::{CvType, LineType, Point2i, Rect, Size2i};
+use cv::core::{CvType, LineType, Point2i, Rect, Scalar, Size2i};
+use cv::highgui::{Show, WindowFlag, highgui_named_window};
 use cv::imgcodecs::ImageReadMode;
 use cv::imgproc::{ColorConversion, InterpolationFlag};
 use cv::mat::Mat;
 use libc::c_int;
+use std::cmp;
 use std::f64::consts::PI;
 use std::iter::Iterator;
 use std::ops::Range;
@@ -329,6 +329,27 @@ impl Image {
 
     }
 
+    #[allow(dead_code)]
+    pub fn clamp_size(&mut self, max: u32, min: u32) {
+        let max = max as c_int;
+        let min = min as c_int;
+
+        let mut factor = 1.0;
+
+        if self.data.cols > max ||
+           self.data.rows > max {
+            factor = max as f32 / cmp::max(self.data.cols, self.data.rows) as f32;
+        }
+        else if self.data.cols < min ||
+                self.data.rows < min {
+            factor = min as f32 / cmp::min(self.data.cols, self.data.rows) as f32;
+        }
+
+        println!("Resizing image by factor {}", factor);
+
+        self.resize_by(factor, factor);
+    }
+
     fn replace_section(&self, lower_bound: Point2u, new_section: &PearlImage) {
         self.rectangle_custom(new_section.image.data.rows,
                               new_section.image.data.cols,
@@ -381,7 +402,7 @@ impl Image {
         let densities = self.lab_densities();
 
         /* TODO: sdev_factor should depend on the image */
-        let sdev_factor = 2.5;
+        let sdev_factor = 1.0;
 
         let l_max = densities[0].mean + sdev_factor * densities[0].sdev;
         let l_min = densities[0].mean - sdev_factor * densities[0].sdev;
@@ -440,7 +461,9 @@ impl Image {
             pearls.push(PearlImage::new(color, &image_size));
         }
 
+        println!("{}", pearls.len());
         self.filter(&mut pearls);
+        println!("{}", pearls.len());
 
         /* Make even multiple of section_size */
         let rem_x = self.data.cols as u32 % section_size.x;
@@ -524,11 +547,14 @@ pub struct Window {
 }
 
 impl Window {
-    pub fn new(title: &str) -> Window {
-        highgui_named_window(&title, WindowFlag::Normal).unwrap();
+    pub fn new(title: &str) -> Result<Window, Error> {
+        match highgui_named_window(&title, WindowFlag::Normal) {
+            Ok(()) => (),
+            Err(_) => return Err(Error::new("Could not create window")),
+        };
 
         let title = title.to_string();
-        Window{ title }
+        Ok(Window{ title })
     }
 
     #[allow(dead_code)]
