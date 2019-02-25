@@ -9,9 +9,9 @@ use std::os::raw::c_double;
 
 #[repr(C)]
 pub struct SSIM {
-    pub r: c_double,
-    pub g: c_double,
     pub b: c_double,
+    pub g: c_double,
+    pub r: c_double,
 }
 
 extern "C" {
@@ -20,15 +20,15 @@ extern "C" {
                im2_data: *const c_uchar, im2_rows: c_int, im2_cols: c_int, im2_type: c_int) -> SSIM;
 }
 
-pub fn write(path: &str, data: &Mat) -> Result<(), Error> {
+pub fn write(path: &str, img: &Mat) -> Result<(), Error> {
     let outcome: c_int;
     let path = CString::new(path).expect("Invalid string conversion");
-    let rows = data.rows;
-    let cols = data.cols;
+    let rows = img.rows;
+    let cols = img.cols;
     let im_type = CvType::Cv8UC3 as c_int;
 
     unsafe {
-        outcome = cv_write(path.as_ptr(), data.data().as_ptr(), rows, cols, im_type);
+        outcome = cv_write(path.as_ptr(), img.data().as_ptr(), rows, cols, im_type);
     }
 
     match outcome {

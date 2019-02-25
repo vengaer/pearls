@@ -28,7 +28,7 @@ int cv_write(char const* path, unsigned char const* data, int rows, int cols, in
 }
 
 SSIM cv_ssim(unsigned char const* im1_data, int im1_rows, int im1_cols, int im1_type, 
-				   unsigned char const* im2_data, int im2_rows, int im2_cols, int im2_type) {
+		     unsigned char const* im2_data, int im2_rows, int im2_cols, int im2_type) {
 	static_assert(std::numeric_limits<unsigned char>::digits == 8, "Unsuitable byte size");
 
 	using cv::Mat;
