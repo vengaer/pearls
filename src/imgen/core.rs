@@ -417,7 +417,11 @@ impl Image {
         let mut a: Vec<f32> = Vec::with_capacity(size);
         let mut b: Vec<f32> = Vec::with_capacity(size);
 
+        /* Remove irrelevant pearls */
         pearls.retain(|p| {
+            l.clear();
+            a.clear();
+            b.clear();
             for y in 0..p.image.data.rows as usize {
                 for x in 0..p.image.data.cols as usize {
                     l.push(p.image.data.at3::<u8>(y as c_int, x as c_int, 0) as f32);
@@ -461,9 +465,7 @@ impl Image {
             pearls.push(PearlImage::new(color, &image_size));
         }
 
-        println!("{}", pearls.len());
         self.filter(&mut pearls);
-        println!("{}", pearls.len());
 
         /* Make even multiple of section_size */
         let rem_x = self.data.cols as u32 % section_size.x;
