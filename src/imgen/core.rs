@@ -453,6 +453,36 @@ impl Image {
         });
     }
 
+    #[allow(dead_code, unused_variables)]
+    fn reproduce_impl(result: &Image, orig: &Image, image_size: Size2u, x_range: Range<usize>, y_range: Range<usize>, pearls: Vec<PearlImage>, upscale: Size2u) {
+        let mut opt_img = ImageDistance::mean(&Image::new(1,1), &pearls[0]);
+        opt_img.force_dist(999999999f64);
+
+        for y in y_range.step_by(image_size.y as usize) {
+            for x in (x_range.start..x_range.end).step_by(image_size.x as usize) {
+                let sub_img = orig.subsection(x as c_int / upscale.x as c_int
+                                              ..(x as c_int + image_size.x as c_int) / upscale.x as c_int,
+                                              y as c_int / upscale.y as c_int
+                                              ..(y as c_int + image_size.y as c_int) / upscale.y as c_int)
+                    .expect("Subsection boundaries out of range");
+
+                for pearl in &pearls {
+                    let c_img = ImageDistance::mean(&sub_img, &pearl);
+
+                    if c_img.dist < opt_img.dist {
+                        opt_img = c_img;
+                    }
+                }
+
+                let piece = opt_img.optimize_inner_radius(&sub_img);
+
+                result.replace_section(Point2u::new(x as u32, y as u32), &piece);
+
+                opt_img.force_dist(999999999f64);
+            }
+        }
+    }
+
 
 
     pub fn reproduce(&mut self, section_size: Size2u, n_images: u32, image_size: Size2u) -> Result<Image, Error> {
@@ -493,49 +523,15 @@ impl Image {
 
         let result = Image::new(self.data.rows * y_upscale as c_int,
                                 self.data.cols * x_upscale as c_int);
-        /* From */
-        /* Pass: result, self, xy-ranges, image_size, copy of pearls, upscale values */
-        let mut opt_img = ImageDistance::mean(&Image::new(1,1), &pearls[0]);
-        opt_img.force_dist(999999999f64);
 
-        /* Keep track of progress */
-        let iterations = (result.rows() as u32 / image_size.y) as f32 *
-                         (result.cols() as u32 / image_size.x) as f32;
-        let mut progress = 0f32;
+        Image::reproduce_impl(&result, 
+                              &self, 
+                              image_size, 
+                              0..result.cols() as usize, 
+                              0..result.rows() as usize, 
+                              pearls, 
+                              Size2u::new(x_upscale, y_upscale));
 
-        for y in (0..result.rows() as usize).step_by(image_size.y as usize) {
-            for x in (0..result.cols() as usize).step_by(image_size.x as usize) {
-                progress += 1.0;
-                println!("Processing: {}/{}", progress, iterations);
-
-                /* Select sub image */
-                let sub_img = self.subsection(x as c_int / x_upscale as c_int
-                                              ..(x as c_int + image_size.x as c_int) / x_upscale as c_int, 
-                                              y as c_int / x_upscale as c_int
-                                              ..(y as c_int + image_size.y as c_int) / y_upscale as c_int)
-                    .expect("Subsection boundaries out of range");
-                
-                /* Check all generated pearls agains sub image */
-                for pearl in &pearls {
-                    let c_img = ImageDistance::mean(&sub_img, &pearl);
-
-                    if c_img.dist < opt_img.dist {
-                        opt_img = c_img;
-                    }
-                }
-                println!("Eab: {}", opt_img.dist);
-
-                /* Pearl with inner radius that minimizes Eab */
-                let piece = opt_img.optimize_inner_radius(&sub_img);
-
-                /* Add to image */
-                result.replace_section(Point2u::new(x as u32, y as u32), &piece);
-
-                opt_img.force_dist(999999999f64);
-                print!("\n");
-            }
-        }
-        /* To */
         Ok(result)
     }
 
@@ -550,6 +546,14 @@ impl Image {
         other.resize(self.data.rows as u32, self.data.cols as u32);
         raw::ssim(&self.data, &other.data)
     }
+
+    #[allow(dead_code)]
+    pub fn ssim_mean(&self, other: &Image) -> Result<f32, Error> {
+        let ssim = self.ssim(&other)?;
+
+        Ok((ssim.r + ssim.g + ssim.b) as f32 / 3.0)
+    }
+    
 
 }
 
