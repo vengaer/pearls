@@ -2,6 +2,7 @@ pub use crate::imgen::raw::SSIM;
 
 use crate::imgen::color::SampleSpace;
 use crate::imgen::error::Error;
+use crate::imgen::math;
 use crate::imgen::math::{DensityEstimate, Point2u, Point3f, Size2u};
 use crate::imgen::raw;
 use cv::core::{CvType, LineType, Point2i, Rect, Scalar, Size2i};
@@ -143,6 +144,7 @@ struct PearlImage {
 }
 
 impl PearlImage {
+    #[allow(dead_code)]
     pub fn new(fg_color: Scalar, image_dims: &Size2u) -> PearlImage {
         let inner_radius = image_dims.y as u32 / 4;
 
@@ -154,7 +156,7 @@ impl PearlImage {
 
         let outer_radius = image.data.rows as u32 / 2;
 
-        if inner_radius >= outer_radius - 1 {
+        if inner_radius > outer_radius - 1 {
             return Err(Error::new("Inner radius larger than outer"));
         }
 
@@ -295,6 +297,10 @@ struct ImageDistance<'a> {
 }
 
 impl<'a> ImageDistance<'a> {
+    pub fn placeholder<'b>(image: &'b PearlImage) -> ImageDistance<'b> {
+        ImageDistance{ image, dist: 1000f64 }
+    }
+
     pub fn mean<'b>(original: &Image, replacement: &'b PearlImage) -> ImageDistance<'b> {
         let orig_lab = original.data.cvt_color(ColorConversion::RGB2Lab);
         let lm_orig = ImageDistance::lab_means(&Image::from_mat(orig_lab));
@@ -321,10 +327,6 @@ impl<'a> ImageDistance<'a> {
         }
         Point3f::from_arr(&means).unwrap()
     }
-
-    pub fn force_dist(&mut self, dist: f64) {
-        self.dist = dist;
-    }
 }
 
 #[derive(Debug)]
@@ -333,6 +335,30 @@ pub enum ExecutionPolicy {
     Sequential,
     Parallellx4,
     Parallellx8,
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum Filter {
+    None,
+    Sdev,
+}
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct CmpWeights{
+    pub eab: f32,
+    pub ssim: f32,
+}
+
+impl CmpWeights {
+    #[allow(dead_code)]
+    pub fn new(eab: f32, ssim: f32) -> Result<CmpWeights, Error> {
+        if !math::approx_eq(eab + ssim, 1.0) {
+            return Err(Error::new("Weights must sum to 1"));
+        }
+        Ok(CmpWeights{ eab, ssim })
+    }
 }
 
 
@@ -463,47 +489,61 @@ impl Image {
         });
     }
 
-    #[allow(dead_code)]
-    fn reproduce_impl(result: Arc<Mutex<&Image>>, orig: Arc<Mutex<&mut Image>>, image_size: Size2u, x_range: Range<usize>, y_range: Range<usize>, pearls: Vec<PearlImage>, upscale: Size2u) {
-        let mut opt_img = ImageDistance::mean(&Image::new(1,1), &pearls[0]);
-        opt_img.force_dist(999999999f64);
+    fn compute_diff(eab: f32, ssim: f32, weights: &CmpWeights) -> f32 {
+        weights.eab * eab + weights.ssim * (1.0 - ssim)
+    }
 
+    #[allow(dead_code)]
+    fn reproduce_impl(result: Arc<Mutex<&Image>>, orig: Image, image_size: Size2u, x_range: Range<usize>, y_range: Range<usize>, pearls: Vec<PearlImage>, upscale: Size2u, weights: CmpWeights) {
         for y in y_range.step_by(image_size.y as usize) {
             for x in (x_range.start..x_range.end).step_by(image_size.x as usize) {
                 let sub_img: Image;
-                {
-                    let img = orig.lock().unwrap();
-                    sub_img = img.subsection(x as c_int / upscale.x as c_int
-                                             ..(x as c_int + image_size.x as c_int) / upscale.x as c_int,
-                                             y as c_int / upscale.y as c_int
-                                             ..(y as c_int + image_size.y as c_int) / upscale.y as c_int)
-                        .expect("Subsection boundaries out of range");
-                }
-                for pearl in &pearls {
-                    let c_img = ImageDistance::mean(&sub_img, &pearl);
+                sub_img = orig.subsection(x as c_int / upscale.x as c_int
+                                         ..(x as c_int + image_size.x as c_int) / upscale.x as c_int,
+                                         y as c_int / upscale.y as c_int
+                                         ..(y as c_int + image_size.y as c_int) / upscale.y as c_int)
+                    .expect("Subsection boundaries out of range");
 
-                    if c_img.dist < opt_img.dist {
-                        opt_img = c_img;
+                let mut opt: f32 = 1000000.0;
+                let mut opt_img: &PearlImage = &pearls[0];
+                for pearl in &pearls {
+                    let c_img = match math::approx_eq(weights.eab, 0.0) {
+                        true => ImageDistance::placeholder(pearl),
+                        false => ImageDistance::mean(&sub_img, &pearl),
+                    };
+                    let mssim = match math::approx_eq(weights.ssim, 0.0) {
+                        true => 0.0,
+                        false => sub_img.ssim_mean(&pearl.image).unwrap(),
+                    };
+
+                    let diff = Image::compute_diff(c_img.dist as f32, mssim, &weights);
+
+                    if diff < opt {
+                        opt_img = pearl;
+                        opt = diff;
                     }
                 }
 
                 {
                     let img = result.lock().unwrap();
-                    let piece = opt_img.image;
-                    img.replace_section(Point2u::new(x as u32, y as u32), &piece);
+                    img.replace_section(Point2u::new(x as u32, y as u32), opt_img);
                 }
-
-                opt_img.force_dist(999999999f64);
             }
         }
     }
 
 
 
-    pub fn reproduce(&mut self, section_size: Size2u, n_images: u32, image_size: Size2u, policy: ExecutionPolicy) -> Result<Image, Error> {
+    pub fn reproduce(&mut self, section_size: Size2u, n_images: u32, mut image_size: Size2u, weights: CmpWeights, filter: Filter, policy: ExecutionPolicy) -> Result<Image, Error> {
         if section_size.x > self.data.cols as u32 || 
            section_size.y > self.data.rows as u32 {
             return Err(Error::new("Invalid sub section dims"));
+        }
+        else if section_size.x != section_size.y {
+            return Err(Error::new("Section must be nxn"));
+        }
+        else if image_size.x < section_size.x {
+            return Err(Error::new("Image size must be larger than section size"));
         }
         else if n_images < 7 {
             return Err(Error::new("Must request at least 7 images"));
@@ -514,17 +554,50 @@ impl Image {
         else if image_size.x != image_size.y {
             return Err(Error::new("Replacement images must be nxn"))
         }
+
+        if image_size.x > 48 {
+            eprintln!("Warning: Size of replacement images will be clamped to 48x48");
+            image_size.x = 48;
+            image_size.y = 48;
+        }
+        else if image_size.x < 6 {
+            eprintln!("Warning: Size of replacement images will be clamped to 6x6");
+            image_size.x = 6;
+            image_size.y = 6;
+        }
+
+        if image_size.x % section_size.x != 0 {
+            eprintln!("Warning: Image size is not an even multiple of section size");
+            let factor = image_size.x / section_size.x + 1;
+            eprintln!("Adjusting image size to {} times the section size", factor);
+            image_size.x = factor * section_size.x;
+            image_size.y = factor * section_size.y;
+        }
         println!("Reproducing...");
 
         /* Generate sub images */
         let mut pearls: Vec<PearlImage> = Vec::with_capacity(n_images as usize);
         let sample_space = SampleSpace::new(n_images as c_int);
 
+        let step = 3usize;
+        let nradii = image_size.x as usize / 2 / step + 1;
+
+        let mut radii: Vec<u32> = Vec::with_capacity(nradii);
+        for i in 0..nradii - 1 {
+            radii.push((i*step) as u32);
+        }
+        radii.push(image_size.x / 2 - 1);
+
         for color in sample_space {
-            pearls.push(PearlImage::new(color, &image_size));
+            for radius in &radii {
+                pearls.push(PearlImage::with_inner_radius(color, &image_size, *radius).unwrap());
+            }
         }
 
-        self.filter(&mut pearls);
+        match filter {
+            Filter::Sdev => self.filter(&mut pearls),
+            _ => (),
+        };
 
         /* Make even multiple of section_size */
         let rem_x = self.data.cols as u32 % section_size.x;
@@ -540,18 +613,18 @@ impl Image {
         let result = Image::new(self.data.rows * y_upscale as c_int,
                                 self.data.cols * x_upscale as c_int);
 
-        let img = Arc::new(Mutex::new(self));
         let res = Arc::new(Mutex::new(&result));
 
         match policy {
             ExecutionPolicy::Sequential => {
                 Image::reproduce_impl(res, 
-                                      img, 
+                                      self.clone(), 
                                       image_size, 
                                       0..result.cols() as usize, 
                                       0..result.rows() as usize, 
                                       pearls, 
-                                      Size2u::new(x_upscale, y_upscale));
+                                      Size2u::new(x_upscale, y_upscale),
+                                      weights);
             },
 
             _ => {
@@ -565,30 +638,31 @@ impl Image {
                 crossbeam::scope(|scope|{
 
                     let mut handles = vec![];
-                    let per_thread: usize;
-                    let mut spec_case: f32;
-                    {
-                        let i = img.lock().unwrap();
-                        let res = i.data.rows as f32 / section_size.y as f32 / nthreads as f32;
-                        per_thread = res as usize;
-                        spec_case = res % 1.0;
-                        if spec_case.abs() < 0.01 {
-                            spec_case = nthreads as f32 + 1.0;
-                        }
-                        else {
-                            spec_case = 1.0 / spec_case;
-                        }
+
+                    let per_thread = self.data.rows as f32 / section_size.y as f32 / nthreads as f32;
+                    let mut spec_case = per_thread % 1.0;
+                    let per_thread = per_thread as usize;
+                    if math::approx_eq(spec_case, 0.0) {
+                        spec_case = nthreads as f32 + 1.0;
+                    }
+                    else {
+                        spec_case = 1.0 / spec_case;
                     }
 
                     let mut row_start = 0usize;
                     for i in 0..nthreads {
-                        let aimg = Arc::clone(&img);
+                        let aimg = self.clone();
                         let ares = Arc::clone(&res);
                         let size = image_size.clone();
                         let pearl_vec = pearls.clone();
                         let cols = result.cols() as usize;
+                        let eweights = weights.clone();
 
-                        let row_end = row_start + per_thread * section_size.y as usize * y_upscale as usize;
+                        let mut row_end = row_start + per_thread * section_size.y as usize * y_upscale as usize;
+
+                        if i % spec_case as usize == 0 {
+                            row_end += section_size.y as usize * y_upscale as usize;
+                        }
 
 
                         let handle = scope.spawn(move |_| {
@@ -598,15 +672,12 @@ impl Image {
                                                   0..cols, 
                                                   row_start..row_end, 
                                                   pearl_vec, 
-                                                  Size2u::new(x_upscale, y_upscale));
+                                                  Size2u::new(x_upscale, y_upscale),
+                                                  eweights);
                         });
 
                         handles.push(handle);
                         row_start = row_end;
-
-                        if i % spec_case as usize == 0 {
-                            row_start += 1;
-                        }
                     }
 
                     
@@ -629,9 +700,28 @@ impl Image {
             return raw::ssim(&self.data, &other.data);
         }
 
-        let mut other = other.clone();
-        other.resize(self.data.rows as u32, self.data.cols as u32);
-        raw::ssim(&self.data, &other.data)
+        let mut to_scale: Image;
+        let reference: &Image;
+        match self.data.rows < other.data.rows {
+            true => {
+                if self.data.cols > other.data.cols {
+                    return Err(Error::new("Unsuitable dimensions for SSIM"));
+                }
+                to_scale = self.clone();
+                reference = other;
+            },
+            false => {
+                if self.data.cols < other.data.cols {
+                    return Err(Error::new("Unsuitable dimensions for SSIM"));
+                }
+                to_scale = other.clone();
+                reference = self;
+            },
+        };
+
+        to_scale.resize(reference.data.rows as u32, reference.data.cols as u32);
+        
+        raw::ssim(&to_scale.data, &reference.data)
     }
 
     #[allow(dead_code)]

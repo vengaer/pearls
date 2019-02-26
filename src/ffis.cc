@@ -38,7 +38,7 @@ SSIM cv_ssim(unsigned char const* im1_data, int im1_rows, int im1_cols, int im1_
 
 	if(im1_type != CV_8UC3 || im2_type != CV_8UC3) {
 		std::cerr << "Only 3-channel images are supported\n";
-		return {-1.f, -1.f, -1.f};
+		return {2.f, 2.f, 2.f};
 	}
 	
 

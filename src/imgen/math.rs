@@ -103,8 +103,25 @@ impl DensityEstimate {
 }
 
 #[allow(dead_code)]
-pub fn approx_eq(a: f32, b: f32) -> bool {
+pub fn arbitrarily_close(a: f32, b: f32) -> bool {
     let diff = (a-b).abs();
 
     diff < 0.007
+}
+
+#[allow(dead_code)]
+pub fn approx_eq(a: f32, b: f32) -> bool {
+    let abs_a = a.abs();
+    let abs_b = b.abs();
+    let diff = (a-b).abs();
+
+    if a == b {
+        true
+    }
+    else if a == 0.0 || b == 0.0 || diff < f32::MIN_POSITIVE {
+        diff < (f32::EPSILON * f32::MIN_POSITIVE)
+    }
+    else {
+        (diff / f32::min(abs_a + abs_b, f32::MAX)) < f32::EPSILON
+    }
 }

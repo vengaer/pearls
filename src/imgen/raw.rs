@@ -47,7 +47,7 @@ pub fn ssim(im1: &Mat, im2: &Mat) -> Result<SSIM, Error> {
                          im2.data().as_ptr(), im2.rows, im2.cols, im_type);
     }
 
-    if result.r < 0.0 {
+    if result.r > 2.0 {
         return Err(Error::new("Error computing SSIM"));
     }
 
