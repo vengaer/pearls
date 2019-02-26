@@ -2,7 +2,7 @@ use crate::imgen::error::Error;
 use num::Float;
 use std::f32;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Point3f {
     pub x: f32,
     pub y: f32,

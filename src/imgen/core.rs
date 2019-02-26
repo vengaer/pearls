@@ -136,6 +136,7 @@ struct PearlImage {
     outer_radius: u32,
     inner_radius: u32,
     color: Scalar,
+    lab_means: Point3f,
 }
 
 impl PearlImage {
@@ -149,7 +150,10 @@ impl PearlImage {
         image.circle(outer_radius as c_int, fg_color);
         image.circle(inner_radius as c_int, Scalar::all(255));
 
-        PearlImage{ image, outer_radius, inner_radius, color: fg_color }
+        let lab_img = image.data.cvt_color(ColorConversion::RGB2Lab);
+        let lab_means = ImageDistance::lab_means(&Image::from_mat(lab_img));
+
+        PearlImage{ image, outer_radius, inner_radius, color: fg_color, lab_means }
     }
 
     pub fn customize(&self, new_radius: u32) {
@@ -181,11 +185,10 @@ struct ImageDistance<'a> {
 
 impl<'a> ImageDistance<'a> {
     pub fn mean<'b>(original: &Image, replacement: &'b PearlImage) -> ImageDistance<'b> {
-        let repl_lab = replacement.image.data.cvt_color(ColorConversion::RGB2Lab);
         let orig_lab = original.data.cvt_color(ColorConversion::RGB2Lab);
-        let lm_repl = ImageDistance::lab_means(&Image::from_mat(repl_lab));
         let lm_orig = ImageDistance::lab_means(&Image::from_mat(orig_lab));
-        let dist = lm_repl.euclid_dist(&lm_orig) as f64;
+
+        let dist = lm_orig.euclid_dist(&replacement.lab_means) as f64;
 
         ImageDistance { image: replacement, dist }
     }
@@ -312,6 +315,14 @@ impl<'a> ImageDistance<'a> {
 
         img
     }
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum ExecutionPolicy {
+    Sequential,
+    Parallellx4,
+    Parallellx8,
 }
 
 
@@ -482,7 +493,8 @@ impl Image {
 
         let result = Image::new(self.data.rows * y_upscale as c_int,
                                 self.data.cols * x_upscale as c_int);
-
+        /* From */
+        /* Pass: result, self, xy-ranges, image_size, copy of pearls, upscale values */
         let mut opt_img = ImageDistance::mean(&Image::new(1,1), &pearls[0]);
         opt_img.force_dist(999999999f64);
 
@@ -517,14 +529,13 @@ impl Image {
                 let piece = opt_img.optimize_inner_radius(&sub_img);
 
                 /* Add to image */
-                result.replace_section(Point2u::new(x as u32, y as u32), 
-                                       &piece);
+                result.replace_section(Point2u::new(x as u32, y as u32), &piece);
 
                 opt_img.force_dist(999999999f64);
                 print!("\n");
             }
         }
-
+        /* To */
         Ok(result)
     }
 
