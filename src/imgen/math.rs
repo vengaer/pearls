@@ -46,7 +46,7 @@ impl Point2u {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Size2u {
     pub x: u32,
     pub y: u32,

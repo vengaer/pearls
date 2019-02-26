@@ -14,6 +14,7 @@ use std::cmp;
 use std::f64::consts::PI;
 use std::iter::Iterator;
 use std::ops::Range;
+use std::sync::{Arc, Mutex};
 
 
 #[derive(Debug, Clone)]
@@ -21,6 +22,8 @@ use std::ops::Range;
 pub struct Image {
     pub data: Mat,
 }
+
+unsafe impl Sync for Image { }
 
 impl Image {
     pub fn new(rows: c_int, cols: c_int) -> Image {
@@ -140,12 +143,21 @@ struct PearlImage {
 }
 
 impl PearlImage {
-
     pub fn new(fg_color: Scalar, image_dims: &Size2u) -> PearlImage {
+        let inner_radius = image_dims.y as u32 / 4;
+
+        PearlImage::with_inner_radius(fg_color, &image_dims, inner_radius).unwrap()
+    }
+
+    pub fn with_inner_radius(fg_color: Scalar, image_dims: &Size2u, inner_radius: u32) -> Result<PearlImage, Error> {
         let image = Image::new(image_dims.y as c_int, image_dims.x as c_int);
 
         let outer_radius = image.data.rows as u32 / 2;
-        let inner_radius = image.data.rows as u32 / 4;
+
+        if inner_radius >= outer_radius - 1 {
+            return Err(Error::new("Inner radius larger than outer"));
+        }
+
         image.rectangle(image.data.rows, image.data.cols, Scalar::all(255));
         image.circle(outer_radius as c_int, fg_color);
         image.circle(inner_radius as c_int, Scalar::all(255));
@@ -153,7 +165,8 @@ impl PearlImage {
         let lab_img = image.data.cvt_color(ColorConversion::RGB2Lab);
         let lab_means = ImageDistance::lab_means(&Image::from_mat(lab_img));
 
-        PearlImage{ image, outer_radius, inner_radius, color: fg_color, lab_means }
+        Ok(PearlImage{ image, outer_radius, inner_radius, color: fg_color, lab_means })
+
     }
 
     pub fn customize(&self, new_radius: u32) {
@@ -167,6 +180,104 @@ impl PearlImage {
         if new_radius != 0 {
             self.image.circle(new_radius as c_int, Scalar::all(255));
         }
+    }
+
+    #[allow(dead_code)]
+    /* Implementation of greedy algorithm to minimize Eab. Heavily inspired by gradient descent */
+    fn optimize_inner_radius_impl(mut img: &mut PearlImage, cmp_means: &Point3f, radius: u32, mut step: u32, dist: f32, prev: SizeMod) -> u32 {
+
+        /* Base case */
+        if step == 0 {
+            return radius;
+        }
+
+        /* If larger radius would be >= as outer radius, make step smaller and push radius inward */
+        let larger_radius = match radius {
+            r if r + step > img.outer_radius => {
+                step /= 2;
+                img.outer_radius - step
+            },
+            _ => radius + step, /* Larger radius in allowed interval */
+        };
+        /* If smaller radius would be <= 0, make step smaller and push radius outward */
+        let smaller_radius = match radius {
+            r if r < step  => {
+                step /= 2;
+                0 + step
+            },
+            _ => radius - step, /* Smaller radius in allows interval */
+        };
+
+        /* Get Eab for pearl with larger inner radius */
+        img.customize(larger_radius);
+        let larger_lab = img.image.data.cvt_color(ColorConversion::RGB2Lab);
+        let lm_large = ImageDistance::lab_means(&Image::from_mat(larger_lab));
+
+        let lrad_dist = lm_large.euclid_dist(&cmp_means);
+
+        /* Get Eab for pearl with smaller inner radius */
+        img.customize(smaller_radius);
+        let smaller_lab = img.image.data.cvt_color(ColorConversion::RGB2Lab);
+        let lm_small = ImageDistance::lab_means(&Image::from_mat(smaller_lab));
+
+        let srad_dist = lm_small.euclid_dist(&cmp_means);
+
+        /* If step is 1 and current Eab is better than the alternatives, stop early */
+        if step == 1 && dist < srad_dist && dist < lrad_dist {
+            return radius;
+        }
+
+        let mut nstep = step;
+        let nmod: SizeMod;
+        let nrad: u32;
+        let ndist: f32;
+        
+        /* Larger radius gives smaller Eab, try even larger */
+        if lrad_dist < srad_dist {
+
+            nmod = SizeMod::Increase;
+            nrad = larger_radius;
+            ndist = lrad_dist;
+
+            /* If the previous size mod shrunk the radius, halve the step */
+            match prev {
+                SizeMod::Decrease => nstep = step / 2,
+                _ => (),
+            };
+        }
+        /* Smaller radius gives smaller Eab, try even smaller */
+        else {
+            nmod = SizeMod::Decrease;
+            nrad = smaller_radius;
+            ndist = srad_dist;
+
+            /* If the previous size mod enlarged the radius, halve the step */
+            match prev {
+                SizeMod::Increase => nstep = step / 2,
+                _ => (),
+            };
+        }
+
+        /* Recursive call */
+        PearlImage::optimize_inner_radius_impl(&mut img, cmp_means, nrad, nstep, ndist, nmod)
+    }
+    
+    #[allow(dead_code)]
+    pub fn optimize_inner_radius(mut img: PearlImage, cmp: Image) -> PearlImage {
+        let step = img.inner_radius / 2;
+
+        /* Precompute Lab means for image to compare with */
+        let lab_cmp = cmp.data.cvt_color(ColorConversion::RGB2Lab);
+        let cmp_means = ImageDistance::lab_means(&Image::from_mat(lab_cmp));
+
+        let inner_radius = img.inner_radius;
+
+        /* Get optimal radius and modify image to return */
+        let new_radius = PearlImage::optimize_inner_radius_impl(&mut img, &cmp_means, inner_radius, step, 1000f32, SizeMod::NoOpt);
+        img.inner_radius = new_radius;
+        img.customize(new_radius);
+
+        img
     }
 }
 
@@ -213,107 +324,6 @@ impl<'a> ImageDistance<'a> {
 
     pub fn force_dist(&mut self, dist: f64) {
         self.dist = dist;
-    }
-
-    /* Implementation of greedy algorithm to minimize Eab. Heavily inspired by gradient descent */
-    fn optimize_inner_radius_impl(mut img: &mut PearlImage, cmp_means: &Point3f, radius: u32, mut step: u32, dist: f32, prev: SizeMod) -> u32 {
-        println!("Radius: {}, Step: {} ", radius, step);
-        println!("-> Adjusted Eab: {}", dist);
-
-        /* Base case */
-        if step == 0 {
-            return radius;
-        }
-
-        /* If larger radius would be >= as outer radius, make step smaller and push radius inward */
-        let larger_radius = match radius {
-            r if r + step > img.outer_radius => {
-                step /= 2;
-                img.outer_radius - step
-            },
-            _ => radius + step, /* Larger radius in allowed interval */
-        };
-        /* If smaller radius would be <= 0, make step smaller and push radius outward */
-        let smaller_radius = match radius {
-            r if r < step  => {
-                step /= 2;
-                0 + step
-            },
-            _ => radius - step, /* Smaller radius in allows interval */
-        };
-
-        /* Get Eab for pearl with larger inner radius */
-        img.customize(larger_radius);
-        let larger_lab = img.image.data.cvt_color(ColorConversion::RGB2Lab);
-        let lm_large = ImageDistance::lab_means(&Image::from_mat(larger_lab));
-
-        let lrad_dist = lm_large.euclid_dist(&cmp_means);
-
-        /* Get Eab for pearl with smaller inner radius */
-        img.customize(smaller_radius);
-        let smaller_lab = img.image.data.cvt_color(ColorConversion::RGB2Lab);
-        let lm_small = ImageDistance::lab_means(&Image::from_mat(smaller_lab));
-
-        let srad_dist = lm_small.euclid_dist(&cmp_means);
-
-        /* If step is 1 and current Eab is better than the alternatives, stop early */
-        if step == 1 && dist < srad_dist && dist < lrad_dist {
-            println!("Radius: {}, Step: {} ", radius, step);
-            println!("Early stop");
-            return radius;
-        }
-
-        let mut nstep = step;
-        let nmod: SizeMod;
-        let nrad: u32;
-        let ndist: f32;
-        
-        /* Larger radius gives smaller Eab, try even larger */
-        if lrad_dist < srad_dist {
-
-            nmod = SizeMod::Increase;
-            nrad = larger_radius;
-            ndist = lrad_dist;
-
-            /* If the previous size mod shrunk the radius, halve the step */
-            match prev {
-                SizeMod::Decrease => nstep = step / 2,
-                _ => (),
-            };
-        }
-        /* Smaller radius gives smaller Eab, try even smaller */
-        else {
-            nmod = SizeMod::Decrease;
-            nrad = smaller_radius;
-            ndist = srad_dist;
-
-            /* If the previous size mod enlarged the radius, halve the step */
-            match prev {
-                SizeMod::Increase => nstep = step / 2,
-                _ => (),
-            };
-        }
-
-        /* Recursive call */
-        ImageDistance::optimize_inner_radius_impl(&mut img, cmp_means, nrad, nstep, ndist, nmod)
-    }
-
-    pub fn optimize_inner_radius(&self, cmp: &Image) -> PearlImage {
-        let step = self.image.inner_radius / 2;
-
-        /* Precompute Lab means for image to compare with */
-        let lab_cmp = cmp.data.cvt_color(ColorConversion::RGB2Lab);
-        let cmp_means = ImageDistance::lab_means(&Image::from_mat(lab_cmp));
-
-        /* Image to return (modifying self would ruin future comparisons) */
-        let mut img = self.image.clone();
-
-        /* Get optimal radius and modify image to return */
-        let new_radius = ImageDistance::optimize_inner_radius_impl(&mut img, &cmp_means, self.image.inner_radius, step, 1000f32, SizeMod::NoOpt);
-        img.inner_radius = new_radius;
-        img.customize(new_radius);
-
-        img
     }
 }
 
@@ -453,19 +463,22 @@ impl Image {
         });
     }
 
-    #[allow(dead_code, unused_variables)]
-    fn reproduce_impl(result: &Image, orig: &Image, image_size: Size2u, x_range: Range<usize>, y_range: Range<usize>, pearls: Vec<PearlImage>, upscale: Size2u) {
+    #[allow(dead_code)]
+    fn reproduce_impl(result: Arc<Mutex<&Image>>, orig: Arc<Mutex<&mut Image>>, image_size: Size2u, x_range: Range<usize>, y_range: Range<usize>, pearls: Vec<PearlImage>, upscale: Size2u) {
         let mut opt_img = ImageDistance::mean(&Image::new(1,1), &pearls[0]);
         opt_img.force_dist(999999999f64);
 
         for y in y_range.step_by(image_size.y as usize) {
             for x in (x_range.start..x_range.end).step_by(image_size.x as usize) {
-                let sub_img = orig.subsection(x as c_int / upscale.x as c_int
-                                              ..(x as c_int + image_size.x as c_int) / upscale.x as c_int,
-                                              y as c_int / upscale.y as c_int
-                                              ..(y as c_int + image_size.y as c_int) / upscale.y as c_int)
-                    .expect("Subsection boundaries out of range");
-
+                let sub_img: Image;
+                {
+                    let img = orig.lock().unwrap();
+                    sub_img = img.subsection(x as c_int / upscale.x as c_int
+                                             ..(x as c_int + image_size.x as c_int) / upscale.x as c_int,
+                                             y as c_int / upscale.y as c_int
+                                             ..(y as c_int + image_size.y as c_int) / upscale.y as c_int)
+                        .expect("Subsection boundaries out of range");
+                }
                 for pearl in &pearls {
                     let c_img = ImageDistance::mean(&sub_img, &pearl);
 
@@ -474,9 +487,11 @@ impl Image {
                     }
                 }
 
-                let piece = opt_img.optimize_inner_radius(&sub_img);
-
-                result.replace_section(Point2u::new(x as u32, y as u32), &piece);
+                {
+                    let img = result.lock().unwrap();
+                    let piece = opt_img.image;
+                    img.replace_section(Point2u::new(x as u32, y as u32), &piece);
+                }
 
                 opt_img.force_dist(999999999f64);
             }
@@ -485,7 +500,7 @@ impl Image {
 
 
 
-    pub fn reproduce(&mut self, section_size: Size2u, n_images: u32, image_size: Size2u) -> Result<Image, Error> {
+    pub fn reproduce(&mut self, section_size: Size2u, n_images: u32, image_size: Size2u, policy: ExecutionPolicy) -> Result<Image, Error> {
         if section_size.x > self.data.cols as u32 || 
            section_size.y > self.data.rows as u32 {
             return Err(Error::new("Invalid sub section dims"));
@@ -499,6 +514,7 @@ impl Image {
         else if image_size.x != image_size.y {
             return Err(Error::new("Replacement images must be nxn"))
         }
+        println!("Reproducing...");
 
         /* Generate sub images */
         let mut pearls: Vec<PearlImage> = Vec::with_capacity(n_images as usize);
@@ -524,13 +540,84 @@ impl Image {
         let result = Image::new(self.data.rows * y_upscale as c_int,
                                 self.data.cols * x_upscale as c_int);
 
-        Image::reproduce_impl(&result, 
-                              &self, 
-                              image_size, 
-                              0..result.cols() as usize, 
-                              0..result.rows() as usize, 
-                              pearls, 
-                              Size2u::new(x_upscale, y_upscale));
+        let img = Arc::new(Mutex::new(self));
+        let res = Arc::new(Mutex::new(&result));
+
+        match policy {
+            ExecutionPolicy::Sequential => {
+                Image::reproduce_impl(res, 
+                                      img, 
+                                      image_size, 
+                                      0..result.cols() as usize, 
+                                      0..result.rows() as usize, 
+                                      pearls, 
+                                      Size2u::new(x_upscale, y_upscale));
+            },
+
+            _ => {
+                let nthreads: usize;
+                match policy {
+                    ExecutionPolicy::Parallellx4 => nthreads = 4,
+                    ExecutionPolicy::Parallellx8 => nthreads = 8,
+                    _ => return Err(Error::new("Unknown execution policy")),
+                };
+
+                crossbeam::scope(|scope|{
+
+                    let mut handles = vec![];
+                    let per_thread: usize;
+                    let mut spec_case: f32;
+                    {
+                        let i = img.lock().unwrap();
+                        let res = i.data.rows as f32 / section_size.y as f32 / nthreads as f32;
+                        per_thread = res as usize;
+                        spec_case = res % 1.0;
+                        if spec_case.abs() < 0.01 {
+                            spec_case = nthreads as f32 + 1.0;
+                        }
+                        else {
+                            spec_case = 1.0 / spec_case;
+                        }
+                    }
+
+                    let mut row_start = 0usize;
+                    for i in 0..nthreads {
+                        let aimg = Arc::clone(&img);
+                        let ares = Arc::clone(&res);
+                        let size = image_size.clone();
+                        let pearl_vec = pearls.clone();
+                        let cols = result.cols() as usize;
+
+                        let row_end = row_start + per_thread * section_size.y as usize * y_upscale as usize;
+
+
+                        let handle = scope.spawn(move |_| {
+                            Image::reproduce_impl(ares, 
+                                                  aimg, 
+                                                  size, 
+                                                  0..cols, 
+                                                  row_start..row_end, 
+                                                  pearl_vec, 
+                                                  Size2u::new(x_upscale, y_upscale));
+                        });
+
+                        handles.push(handle);
+                        row_start = row_end;
+
+                        if i % spec_case as usize == 0 {
+                            row_start += 1;
+                        }
+                    }
+
+                    
+                    for thread in handles {
+                        thread.join().unwrap();
+                    }
+                   
+                }).unwrap();
+
+            },
+        };
 
         Ok(result)
     }

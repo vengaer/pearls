@@ -12,3 +12,4 @@ cc="*"
 cv = { git = "https://github.com/nebgnahz/cv-rs.git" }
 num="*"
 libc="*"
+crossbeam="*"
