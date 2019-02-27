@@ -113,20 +113,21 @@ impl Image {
         self.data.at3::<u8>(y_idx, x_idx, z_idx)
     }
 
-    pub fn subsection(&self, x_range: Range<c_int>, y_range: Range<c_int>) -> Result<Image, Error> {
+    pub fn subsection(&self, x_range: &Range<c_int>, y_range: &Range<c_int>) -> Result<Image, Error> {
+
         if y_range.end <= y_range.start || x_range.end <= x_range.start {
             return Err(Error::new("Range must be of length >= 1 and increasing"))
         }
-        else if y_range.end > self.data.rows || x_range.end > self.data.cols {
+        else if y_range.end - 1 > self.data.rows || x_range.end - 1 > self.data.cols {
             println!("x_range: {}-{}, y_range: {}-{}", x_range.start, x_range.end, y_range.start, y_range.end);
             println!("Dims: {}x{}", self.data.cols, self.data.rows);
             return Err(Error::new("Range out of bounds"));
         }
 
-        let rows = y_range.end - 1 - y_range.start;
-        let cols = x_range.end - 1 - x_range.start;
+        let rows = y_range.end - y_range.start;
+        let cols = x_range.end - x_range.start;
 
-        let rect = Rect::new(x_range.start, y_range.start, rows, cols);
+        let rect = Rect::new(x_range.start, y_range.start, cols, rows);
         let data = self.data.roi(rect);
 
         Ok(Image::from_mat(data))
@@ -495,14 +496,15 @@ impl Image {
 
     #[allow(dead_code)]
     fn reproduce_impl(result: Arc<Mutex<&Image>>, orig: Image, image_size: Size2u, x_range: Range<usize>, y_range: Range<usize>, pearls: Vec<PearlImage>, upscale: Size2u, weights: CmpWeights) {
-        for y in y_range.step_by(image_size.y as usize) {
+        for y in (y_range.start..y_range.end).step_by(image_size.y as usize) {
+            let y_orig = y - y_range.start;
+            let y_orig_range = y_orig as c_int / upscale.y as c_int..(y_orig as c_int + image_size.y as c_int) / upscale.y as c_int;
             for x in (x_range.start..x_range.end).step_by(image_size.x as usize) {
+                let x_orig_range = x as c_int / upscale.x as c_int..(x as c_int + image_size.x as c_int) / upscale.x as c_int;
+
                 let sub_img: Image;
-                sub_img = orig.subsection(x as c_int / upscale.x as c_int
-                                         ..(x as c_int + image_size.x as c_int) / upscale.x as c_int,
-                                         y as c_int / upscale.y as c_int
-                                         ..(y as c_int + image_size.y as c_int) / upscale.y as c_int)
-                    .expect("Subsection boundaries out of range");
+                sub_img = orig.subsection(&x_orig_range, &y_orig_range)
+                                .expect("Subsection boundaries out of range");
 
                 let mut opt: f32 = 1000000.0;
                 let mut opt_img: &PearlImage = &pearls[0];
@@ -651,29 +653,34 @@ impl Image {
 
                     let mut row_start = 0usize;
                     for i in 0..nthreads {
-                        let aimg = self.clone();
                         let ares = Arc::clone(&res);
-                        let size = image_size.clone();
-                        let pearl_vec = pearls.clone();
+                        let image_size = image_size.clone();
+                        let pearls = pearls.clone();
                         let cols = result.cols() as usize;
-                        let eweights = weights.clone();
+                        let weights = weights.clone();
 
                         let mut row_end = row_start + per_thread * section_size.y as usize * y_upscale as usize;
 
                         if i % spec_case as usize == 0 {
+                            /* Thread should handle an extra section of rows */
                             row_end += section_size.y as usize * y_upscale as usize;
                         }
+
+                        let soi_x_range = 0..self.data.cols;
+                        let soi_y_range = row_start as c_int / y_upscale as c_int..row_end as c_int / y_upscale as c_int;
+
+                        let soi = self.subsection(&soi_x_range, &soi_y_range).unwrap();
 
 
                         let handle = scope.spawn(move |_| {
                             Image::reproduce_impl(ares, 
-                                                  aimg, 
-                                                  size, 
+                                                  soi, 
+                                                  image_size, 
                                                   0..cols, 
                                                   row_start..row_end, 
-                                                  pearl_vec, 
+                                                  pearls, 
                                                   Size2u::new(x_upscale, y_upscale),
-                                                  eweights);
+                                                  weights);
                         });
 
                         handles.push(handle);
