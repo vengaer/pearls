@@ -170,7 +170,6 @@ impl PearlImage {
         let lab_means = cmp::lab_means(&Image::from_mat(lab_img));
 
         Ok(PearlImage{ image, outer_radius, inner_radius, color: fg_color, lab_means })
-
     }
 }
 
@@ -353,11 +352,11 @@ impl Image {
 
                 for pearl in &pearls {
                     let eab = match math::approx_eq(weights.eab, 0.0) {
-                        true => 0.0,
+                        true  => 0.0,
                         false => cmp::mean_distance(&sub_img, &pearl),
                     };
                     let mssim = match math::approx_eq(weights.ssim, 0.0) {
-                        true => 0.0,
+                        true  => 0.0,
                         false => cmp::ssim_mean(&sub_img, &pearl.image).unwrap(),
                     };
 
@@ -484,13 +483,12 @@ impl Image {
             _ => {
                 let nthreads = match policy {
                     ExecutionPolicy::Parallellx4  => 4,
-                    ExecutionPolicy::Parallellx8  => 8,
+                    ExecutionPolicy::Parallellx8  => {
+                        eprintln!("Note: the benefits of running more than 4 threads are generally next to none.");
+                        8
+                    },
                     _ => return Err(Error::new("Unknown execution policy")),
                 };
-
-                if nthreads > 4 && math::approx_eq(weights.ssim, 0.0) {
-                    eprintln!("Note: the benefits of running more than 4 threads are generally next to none");
-                }
 
                 crossbeam::scope( |scope| {
                     let mut handles = vec![];
