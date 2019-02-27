@@ -1,8 +1,9 @@
 pub use crate::imgen::raw::SSIM;
 
+use crate::imgen::{cmp, math};
+use crate::imgen::cmp::Weights;
 use crate::imgen::color::SampleSpace;
 use crate::imgen::error::Error;
-use crate::imgen::math;
 use crate::imgen::math::{DensityEstimate, Point2u, Point3f, Size2u};
 use crate::imgen::raw;
 use cv::core::{CvType, LineType, Point2i, Rect, Scalar, Size2i};
@@ -11,7 +12,7 @@ use cv::imgcodecs::ImageReadMode;
 use cv::imgproc::{ColorConversion, InterpolationFlag};
 use cv::mat::Mat;
 use libc::c_int;
-use std::cmp;
+use std::cmp as scmp;
 use std::f64::consts::PI;
 use std::iter::Iterator;
 use std::ops::Range;
@@ -136,12 +137,12 @@ impl Image {
 }
 
 #[derive(Debug, Clone)]
-struct PearlImage {
+pub struct PearlImage {
     pub image: Image,
     outer_radius: u32,
     inner_radius: u32,
     color: Scalar,
-    lab_means: Point3f,
+    pub lab_means: Point3f,
 }
 
 impl PearlImage {
@@ -166,167 +167,10 @@ impl PearlImage {
         image.circle(inner_radius as c_int, Scalar::all(255));
 
         let lab_img = image.data.cvt_color(ColorConversion::RGB2Lab);
-        let lab_means = ImageDistance::lab_means(&Image::from_mat(lab_img));
+        let lab_means = cmp::lab_means(&Image::from_mat(lab_img));
 
         Ok(PearlImage{ image, outer_radius, inner_radius, color: fg_color, lab_means })
 
-    }
-
-    pub fn customize(&self, new_radius: u32) {
-        if new_radius >= self.outer_radius {
-            return ();
-        }
-
-        if new_radius < self.inner_radius {
-            self.image.circle(self.outer_radius as c_int, self.color);
-        }
-        if new_radius != 0 {
-            self.image.circle(new_radius as c_int, Scalar::all(255));
-        }
-    }
-
-    #[allow(dead_code)]
-    /* Implementation of greedy algorithm to minimize Eab. Heavily inspired by gradient descent */
-    fn optimize_inner_radius_impl(mut img: &mut PearlImage, cmp_means: &Point3f, radius: u32, mut step: u32, dist: f32, prev: SizeMod) -> u32 {
-
-        /* Base case */
-        if step == 0 {
-            return radius;
-        }
-
-        /* If larger radius would be >= as outer radius, make step smaller and push radius inward */
-        let larger_radius = match radius {
-            r if r + step > img.outer_radius => {
-                step /= 2;
-                img.outer_radius - step
-            },
-            _ => radius + step, /* Larger radius in allowed interval */
-        };
-        /* If smaller radius would be <= 0, make step smaller and push radius outward */
-        let smaller_radius = match radius {
-            r if r < step  => {
-                step /= 2;
-                0 + step
-            },
-            _ => radius - step, /* Smaller radius in allows interval */
-        };
-
-        /* Get Eab for pearl with larger inner radius */
-        img.customize(larger_radius);
-        let larger_lab = img.image.data.cvt_color(ColorConversion::RGB2Lab);
-        let lm_large = ImageDistance::lab_means(&Image::from_mat(larger_lab));
-
-        let lrad_dist = lm_large.euclid_dist(&cmp_means);
-
-        /* Get Eab for pearl with smaller inner radius */
-        img.customize(smaller_radius);
-        let smaller_lab = img.image.data.cvt_color(ColorConversion::RGB2Lab);
-        let lm_small = ImageDistance::lab_means(&Image::from_mat(smaller_lab));
-
-        let srad_dist = lm_small.euclid_dist(&cmp_means);
-
-        /* If step is 1 and current Eab is better than the alternatives, stop early */
-        if step == 1 && dist < srad_dist && dist < lrad_dist {
-            return radius;
-        }
-
-        let mut nstep = step;
-        let nmod: SizeMod;
-        let nrad: u32;
-        let ndist: f32;
-        
-        /* Larger radius gives smaller Eab, try even larger */
-        if lrad_dist < srad_dist {
-
-            nmod = SizeMod::Increase;
-            nrad = larger_radius;
-            ndist = lrad_dist;
-
-            /* If the previous size mod shrunk the radius, halve the step */
-            match prev {
-                SizeMod::Decrease => nstep = step / 2,
-                _ => (),
-            };
-        }
-        /* Smaller radius gives smaller Eab, try even smaller */
-        else {
-            nmod = SizeMod::Decrease;
-            nrad = smaller_radius;
-            ndist = srad_dist;
-
-            /* If the previous size mod enlarged the radius, halve the step */
-            match prev {
-                SizeMod::Increase => nstep = step / 2,
-                _ => (),
-            };
-        }
-
-        /* Recursive call */
-        PearlImage::optimize_inner_radius_impl(&mut img, cmp_means, nrad, nstep, ndist, nmod)
-    }
-    
-    #[allow(dead_code)]
-    pub fn optimize_inner_radius(mut img: PearlImage, cmp: Image) -> PearlImage {
-        let step = img.inner_radius / 2;
-
-        /* Precompute Lab means for image to compare with */
-        let lab_cmp = cmp.data.cvt_color(ColorConversion::RGB2Lab);
-        let cmp_means = ImageDistance::lab_means(&Image::from_mat(lab_cmp));
-
-        let inner_radius = img.inner_radius;
-
-        /* Get optimal radius and modify image to return */
-        let new_radius = PearlImage::optimize_inner_radius_impl(&mut img, &cmp_means, inner_radius, step, 1000f32, SizeMod::NoOpt);
-        img.inner_radius = new_radius;
-        img.customize(new_radius);
-
-        img
-    }
-}
-
-#[derive(Debug)]
-enum SizeMod {
-    NoOpt,
-    Decrease,
-    Increase
-}
-
-#[derive(Debug)]
-struct ImageDistance<'a> {
-    pub image: &'a PearlImage,
-    pub dist: f64,
-}
-
-impl<'a> ImageDistance<'a> {
-    pub fn placeholder<'b>(image: &'b PearlImage) -> ImageDistance<'b> {
-        ImageDistance{ image, dist: 1000f64 }
-    }
-
-    pub fn mean<'b>(original: &Image, replacement: &'b PearlImage) -> ImageDistance<'b> {
-        let orig_lab = original.data.cvt_color(ColorConversion::RGB2Lab);
-        let lm_orig = ImageDistance::lab_means(&Image::from_mat(orig_lab));
-
-        let dist = lm_orig.euclid_dist(&replacement.lab_means) as f64;
-
-        ImageDistance { image: replacement, dist }
-    }
-
-    fn lab_means(lab_img: &Image) -> Point3f {
-
-        let mut result: f64 = 0.0;
-        let mut means: [f64; 3] = [0.0; 3];
-        let pixels = lab_img.rows() * lab_img.cols();
-
-        for c in 0usize..3 {
-            for y in 0..lab_img.data.rows {
-                for x in 0..lab_img.data.cols {
-                    result += lab_img.at(x, y, c as c_int) as f64;
-                }
-            }
-            means[c] = result / pixels as f64;
-            result = 0.0;
-        }
-        Point3f::from_arr(&means).unwrap()
     }
 }
 
@@ -344,24 +188,6 @@ pub enum Filter {
     None,
     Sdev,
 }
-
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct CmpWeights{
-    pub eab: f32,
-    pub ssim: f32,
-}
-
-impl CmpWeights {
-    #[allow(dead_code)]
-    pub fn new(eab: f32, ssim: f32) -> Result<CmpWeights, Error> {
-        if !math::approx_eq(eab + ssim, 1.0) {
-            return Err(Error::new("Weights must sum to 1"));
-        }
-        Ok(CmpWeights{ eab, ssim })
-    }
-}
-
 
 impl Image {
     pub fn resize(&mut self, rows: u32, cols: u32) {
@@ -388,11 +214,11 @@ impl Image {
 
         if self.data.cols > max ||
            self.data.rows > max {
-            factor = max as f32 / cmp::max(self.data.cols, self.data.rows) as f32;
+            factor = max as f32 / scmp::max(self.data.cols, self.data.rows) as f32;
         }
         else if self.data.cols < min ||
                 self.data.rows < min {
-            factor = min as f32 / cmp::min(self.data.cols, self.data.rows) as f32;
+            factor = min as f32 / scmp::min(self.data.cols, self.data.rows) as f32;
         }
 
         println!("Resizing image by factor {}", factor);
@@ -451,7 +277,6 @@ impl Image {
 
         let densities = self.lab_densities();
 
-        /* TODO: sdev_factor should depend on the image */
         let sdev_factor = 1.0;
 
         let l_max = densities[0].mean + sdev_factor * densities[0].sdev;
@@ -490,16 +315,19 @@ impl Image {
         });
     }
 
-    fn compute_diff(eab: f32, ssim: f32, weights: &CmpWeights) -> f32 {
+    fn compute_diff(eab: f32, ssim: f32, weights: &Weights) -> f32 {
         weights.eab * eab + weights.ssim * (1.0 - ssim)
     }
 
-    #[allow(dead_code)]
-    fn reproduce_impl(result: Arc<Mutex<&Image>>, orig: Image, image_size: Size2u, x_range: Range<usize>, y_range: Range<usize>, pearls: Vec<PearlImage>, upscale: Size2u, weights: CmpWeights) {
+    fn reproduce_impl(result: Arc<Mutex<&Image>>, orig: Image, image_size: Size2u, x_range: Range<usize>, y_range: Range<usize>, pearls: Vec<PearlImage>, upscale: Size2u, weights: Weights) {
+
         for y in (y_range.start..y_range.end).step_by(image_size.y as usize) {
+
             let y_orig = y - y_range.start;
             let y_orig_range = y_orig as c_int / upscale.y as c_int..(y_orig as c_int + image_size.y as c_int) / upscale.y as c_int;
+            
             for x in (x_range.start..x_range.end).step_by(image_size.x as usize) {
+
                 let x_orig_range = x as c_int / upscale.x as c_int..(x as c_int + image_size.x as c_int) / upscale.x as c_int;
 
                 let sub_img: Image;
@@ -508,17 +336,18 @@ impl Image {
 
                 let mut opt: f32 = 1000000.0;
                 let mut opt_img: &PearlImage = &pearls[0];
+
                 for pearl in &pearls {
-                    let c_img = match math::approx_eq(weights.eab, 0.0) {
-                        true => ImageDistance::placeholder(pearl),
-                        false => ImageDistance::mean(&sub_img, &pearl),
+                    let eab = match math::approx_eq(weights.eab, 0.0) {
+                        true => 0.0,
+                        false => cmp::mean_distance(&sub_img, &pearl),
                     };
                     let mssim = match math::approx_eq(weights.ssim, 0.0) {
                         true => 0.0,
-                        false => sub_img.ssim_mean(&pearl.image).unwrap(),
+                        false => cmp::ssim_mean(&sub_img, &pearl.image).unwrap(),
                     };
 
-                    let diff = Image::compute_diff(c_img.dist as f32, mssim, &weights);
+                    let diff = Image::compute_diff(eab, mssim, &weights);
 
                     if diff < opt {
                         opt_img = pearl;
@@ -536,7 +365,7 @@ impl Image {
 
 
 
-    pub fn reproduce(&mut self, section_size: Size2u, n_images: u32, mut image_size: Size2u, weights: CmpWeights, filter: Filter, policy: ExecutionPolicy) -> Result<Image, Error> {
+    pub fn reproduce(&mut self, section_size: Size2u, n_images: u32, mut image_size: Size2u, weights: Weights, filter: Filter, policy: ExecutionPolicy) -> Result<Image, Error> {
         if section_size.x > self.data.cols as u32 || 
            section_size.y > self.data.rows as u32 {
             return Err(Error::new("Invalid sub section dims"));
@@ -630,28 +459,22 @@ impl Image {
             },
 
             _ => {
-                let nthreads: usize;
-                match policy {
-                    ExecutionPolicy::Parallellx4 => nthreads = 4,
-                    ExecutionPolicy::Parallellx8 => nthreads = 8,
+                let nthreads = match policy {
+                    ExecutionPolicy::Parallellx4  => 4,
+                    ExecutionPolicy::Parallellx8  => 8,
                     _ => return Err(Error::new("Unknown execution policy")),
                 };
 
-                crossbeam::scope(|scope|{
+                if nthreads > 4 && math::approx_eq(weights.ssim, 0.0) {
+                    eprintln!("Note: the benefits of running more than 4 threads are generally next to none");
+                }
 
+                crossbeam::scope(|scope|{
                     let mut handles = vec![];
 
-                    let per_thread = self.data.rows as f32 / section_size.y as f32 / nthreads as f32;
-                    let mut spec_case = per_thread % 1.0;
-                    let per_thread = per_thread as usize;
-                    if math::approx_eq(spec_case, 0.0) {
-                        spec_case = nthreads as f32 + 1.0;
-                    }
-                    else {
-                        spec_case = 1.0 / spec_case;
-                    }
-
                     let mut row_start = 0usize;
+                    let mut rem_rows = self.data.rows as usize;
+
                     for i in 0..nthreads {
                         let ares = Arc::clone(&res);
                         let image_size = image_size.clone();
@@ -659,9 +482,13 @@ impl Image {
                         let cols = result.cols() as usize;
                         let weights = weights.clone();
 
+                        let per_thread = rem_rows as f32 / section_size.y as f32 / (nthreads - i) as f32;
+                        let thread_rem = per_thread % 1.0;
+
+                        let per_thread = per_thread as usize;
                         let mut row_end = row_start + per_thread * section_size.y as usize * y_upscale as usize;
 
-                        if i % spec_case as usize == 0 {
+                        if !math::approx_eq(thread_rem, 0.0) {
                             /* Thread should handle an extra section of rows */
                             row_end += section_size.y as usize * y_upscale as usize;
                         }
@@ -670,7 +497,6 @@ impl Image {
                         let soi_y_range = row_start as c_int / y_upscale as c_int..row_end as c_int / y_upscale as c_int;
 
                         let soi = self.subsection(&soi_x_range, &soi_y_range).unwrap();
-
 
                         let handle = scope.spawn(move |_| {
                             Image::reproduce_impl(ares, 
@@ -684,14 +510,13 @@ impl Image {
                         });
 
                         handles.push(handle);
+                        rem_rows -= (row_end - row_start) / y_upscale as usize;
                         row_start = row_end;
                     }
-
                     
                     for thread in handles {
                         thread.join().unwrap();
                     }
-                   
                 }).unwrap();
 
             },
@@ -699,46 +524,6 @@ impl Image {
 
         Ok(result)
     }
-
-    #[allow(dead_code)]
-    pub fn ssim(&self, other: &Image) -> Result<SSIM, Error> {
-        if self.data.rows == other.data.rows &&
-           self.data.cols == other.data.cols {
-            return raw::ssim(&self.data, &other.data);
-        }
-
-        let mut to_scale: Image;
-        let reference: &Image;
-        match self.data.rows < other.data.rows {
-            true => {
-                if self.data.cols > other.data.cols {
-                    return Err(Error::new("Unsuitable dimensions for SSIM"));
-                }
-                to_scale = self.clone();
-                reference = other;
-            },
-            false => {
-                if self.data.cols < other.data.cols {
-                    return Err(Error::new("Unsuitable dimensions for SSIM"));
-                }
-                to_scale = other.clone();
-                reference = self;
-            },
-        };
-
-        to_scale.resize(reference.data.rows as u32, reference.data.cols as u32);
-        
-        raw::ssim(&to_scale.data, &reference.data)
-    }
-
-    #[allow(dead_code)]
-    pub fn ssim_mean(&self, other: &Image) -> Result<f32, Error> {
-        let ssim = self.ssim(&other)?;
-
-        Ok((ssim.r + ssim.g + ssim.b) as f32 / 3.0)
-    }
-    
-
 }
 
 
@@ -747,21 +532,24 @@ impl Image {
 #[allow(dead_code)]
 pub struct Window {
     title: String,
+    active: bool,
 }
 
 impl Window {
-    pub fn new(title: &str) -> Result<Window, Error> {
-        match highgui_named_window(&title, WindowFlag::Normal) {
-            Ok(()) => (),
-            Err(_) => return Err(Error::new("Could not create window")),
-        };
-
+    pub fn new(title: &str) -> Window {
         let title = title.to_string();
-        Ok(Window{ title })
+        let active = false;
+        Window{ title, active }
     }
 
     #[allow(dead_code)]
     pub fn show(&self, image: &Image) -> Result<(), Error> {
+        if !self.active {
+            match highgui_named_window(&self.title, WindowFlag::Normal) {
+                Ok(()) => (),
+                Err(_) => return Err(Error::new("Could not create window")),
+            };
+        }
         match image.data.show(&self.title, 0) {
             Ok(()) => Ok(()),
             Err(_) => {

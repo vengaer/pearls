@@ -1,13 +1,19 @@
-pub mod color;
+mod color;
+mod error;
+mod raw;
+
+pub mod cmp;
 pub mod core;
-pub mod error;
 pub mod math;
-pub mod raw;
 
 #[cfg(test)]
 mod tests {
     use crate::imgen::math;
     use crate::imgen::core::Image;
+
+    /* On the SSIM test: Matlab uses an 8x8 block window 
+     * whereas I use an 11x11 Gaussian meaning the 
+     * results won't be identical */
 
     #[test]
     fn ssim_self() {
