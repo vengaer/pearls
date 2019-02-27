@@ -189,6 +189,13 @@ pub enum Filter {
     Sdev,
 }
 
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum ImProc {
+    None,
+    OrigSize,
+}
+
 impl Image {
     pub fn resize(&mut self, rows: u32, cols: u32) {
         self.data = self.data.resize_to(Size2i::new(cols as c_int, rows as c_int), 
@@ -319,7 +326,14 @@ impl Image {
         weights.eab * eab + weights.ssim * (1.0 - ssim)
     }
 
-    fn reproduce_impl(result: Arc<Mutex<&Image>>, orig: Image, image_size: Size2u, x_range: Range<usize>, y_range: Range<usize>, pearls: Vec<PearlImage>, upscale: Size2u, weights: Weights) {
+    fn reproduce_impl(result: Arc<Mutex<&Image>>, 
+                      orig: Image, 
+                      image_size: Size2u, 
+                      x_range: Range<usize>, 
+                      y_range: Range<usize>, 
+                      pearls: Vec<PearlImage>, 
+                      upscale: Size2u, 
+                      weights: Weights) {
 
         for y in (y_range.start..y_range.end).step_by(image_size.y as usize) {
 
@@ -365,7 +379,16 @@ impl Image {
 
 
 
-    pub fn reproduce(&mut self, section_size: Size2u, n_images: u32, mut image_size: Size2u, weights: Weights, filter: Filter, policy: ExecutionPolicy) -> Result<Image, Error> {
+    pub fn reproduce(&mut self, 
+                     section_size: Size2u, 
+                     n_images: u32, 
+                     mut image_size: Size2u, 
+                     weights: Weights, 
+                     filter: Filter, 
+                     policy: ExecutionPolicy, 
+                     proc: ImProc) 
+                     -> Result<Image, Error> {
+
         if section_size.x > self.data.cols as u32 || 
            section_size.y > self.data.rows as u32 {
             return Err(Error::new("Invalid sub section dims"));
@@ -441,7 +464,7 @@ impl Image {
         let x_upscale = image_size.x / section_size.x;
         let y_upscale = image_size.y / section_size.y;
 
-        let result = Image::new(self.data.rows * y_upscale as c_int,
+        let mut result = Image::new(self.data.rows * y_upscale as c_int,
                                 self.data.cols * x_upscale as c_int);
 
         let res = Arc::new(Mutex::new(&result));
@@ -469,7 +492,7 @@ impl Image {
                     eprintln!("Note: the benefits of running more than 4 threads are generally next to none");
                 }
 
-                crossbeam::scope(|scope|{
+                crossbeam::scope( |scope| {
                     let mut handles = vec![];
 
                     let mut row_start = 0usize;
@@ -517,9 +540,15 @@ impl Image {
                     for thread in handles {
                         thread.join().unwrap();
                     }
+
                 }).unwrap();
 
             },
+        };
+
+        match proc {
+            ImProc::OrigSize => result.resize(self.data.rows as u32, self.data.cols as u32),
+            _ => (),
         };
 
         Ok(result)
@@ -543,10 +572,10 @@ impl Window {
     }
 
     #[allow(dead_code)]
-    pub fn show(&self, image: &Image) -> Result<(), Error> {
+    pub fn show(&mut self, image: &Image) -> Result<(), Error> {
         if !self.active {
-            match highgui_named_window(&self.title, WindowFlag::Normal) {
-                Ok(()) => (),
+            self.active = match highgui_named_window(&self.title, WindowFlag::Normal) {
+                Ok(()) => true,
                 Err(_) => return Err(Error::new("Could not create window")),
             };
         }
