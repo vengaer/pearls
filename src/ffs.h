@@ -1,5 +1,5 @@
-#ifndef FFIS_H
-#define FFIS_H
+#ifndef FFS_H
+#define FFS_H
 
 #pragma once
 #include <opencv2/opencv.hpp>

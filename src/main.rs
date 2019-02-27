@@ -11,7 +11,7 @@ fn main() {
     let min_dim = 100;
 
     let window = Window::new("Window1");
-    let mut img = Image::from_file("images/image3.jpg").unwrap();
+    let mut img = Image::from_file("images/tree.jpg").unwrap();
     
     img.clamp_size(max_dim, min_dim);
     //window.show(&img).expect("Could not show image");
