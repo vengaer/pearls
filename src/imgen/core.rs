@@ -191,7 +191,7 @@ pub enum Filter {
 
 #[derive(Debug)]
 #[allow(dead_code)]
-pub enum ImProc {
+pub enum PostProc {
     None,
     OrigSize,
 }
@@ -387,7 +387,7 @@ impl Image {
                      weights: Weights, 
                      filter: Filter, 
                      policy: ExecutionPolicy, 
-                     proc: ImProc) 
+                     proc: PostProc) 
                      -> Result<Image, Error> {
 
         if section_size.x > self.data.cols as u32 || 
@@ -547,7 +547,7 @@ impl Image {
         };
 
         match proc {
-            ImProc::OrigSize => result.resize(self.data.rows as u32, self.data.cols as u32),
+            PostProc::OrigSize => result.resize(self.data.rows as u32, self.data.cols as u32),
             _ => (),
         };
 

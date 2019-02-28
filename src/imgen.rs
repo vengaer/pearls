@@ -5,6 +5,7 @@ mod raw;
 pub mod cmp;
 pub mod core;
 pub mod math;
+pub mod parser;
 
 #[cfg(test)]
 mod tests {

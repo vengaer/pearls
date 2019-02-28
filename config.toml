@@ -1,0 +1,15 @@
+[io]
+input = "images/image1.jpg"
+output = "images/out.jpg"
+
+[params]
+subsize = "4x4"
+ncolors = "100"
+circsize = "24x24"
+weights = "1.0,0.0"
+filter = "sdev"
+exec = "parallellx4"
+postproc = "none"
+
+[visuals]
+show = "none"
