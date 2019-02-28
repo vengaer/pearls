@@ -299,6 +299,9 @@ impl Image {
         let mut a: Vec<f32> = Vec::with_capacity(size);
         let mut b: Vec<f32> = Vec::with_capacity(size);
 
+        /* In case image is too monochromatic */
+        let backup = pearls.clone();
+
         /* Remove less relevant pearls */
         pearls.retain(|p| {
             l.clear();
@@ -320,6 +323,13 @@ impl Image {
             a_mean > a_min && a_mean < a_max &&
             b_mean > b_min && b_mean < b_max
         });
+
+        if pearls.len() == 0 {
+            eprintln!("Not enough variation in image, filtering would result in no circles remaining");
+            for pearl in backup {
+                pearls.push(pearl);
+            }
+        }
     }
 
     fn compute_diff(eab: f32, ssim: f32, weights: &Weights) -> f32 {
@@ -403,7 +413,7 @@ impl Image {
         else if n_images < 7 {
             return Err(Error::new("Must request at least 7 images"));
         }
-        else if n_images > 500 {
+        else if n_images > 200 {
             return Err(Error::new("Too many images requested"));
         }
         else if image_size.x != image_size.y {
