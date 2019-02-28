@@ -6,10 +6,10 @@ output = "images/out.jpg"
 subsize = "4x4"
 ncolors = "100"
 circsize = "24x24"
-weights = "1.0,0.0"
-filter = "sdev"
-exec = "parallellx4"
-postproc = "none"
+weights = "1.0, 0.0"
+filter = "sdev" 		# Options: none, sdev
+exec = "parallellx4"	# Options: sequential, parallellx4, parallellx8
+postproc = "none"		# Options: none, origsize
 
 [visuals]
-show = "none"
+show = "none"			# Options: none, original, result, both

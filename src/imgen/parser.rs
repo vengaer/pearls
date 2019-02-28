@@ -33,7 +33,7 @@ impl Tag {
 
 #[derive(Debug)]
 pub enum Show {
-    No,
+    None,
     Res,
     Orig,
     Both,
@@ -42,7 +42,7 @@ pub enum Show {
 impl Show {
     fn from_str(string: &str) -> Result<Show, Error> {
         match string.as_ref() {
-            "no" => Ok(Show::No),
+            "none" => Ok(Show::None),
             "result" => Ok(Show::Res),
             "original" => Ok(Show::Orig),
             "both" => Ok(Show::Both),
@@ -78,7 +78,7 @@ impl ParseResult {
             filter: Filter::None,
             exec: ExecutionPolicy::Sequential,
             postproc: PostProc::None,
-            show: Show::No,
+            show: Show::None,
         }
     }
 
@@ -93,10 +93,23 @@ pub fn parse(config: &str) -> Result<ParseResult, Error> {
     let tag_re = Regex::new(r"^\[(?P<tag>\w+)\]").unwrap();
     let cont_re = Regex::new(r"(?P<content>[\w\d., ]+)").unwrap();
     let path_re = Regex::new(r"(?P<path>[/\w\d.]+)").unwrap();
+    let comment_re = Regex::new(r"(?P<content>.*)#").unwrap();
 
     let mut result = ParseResult::default();
 
     for line in contents.lines() {
+        /* Strip comments */
+        //let caps = comment_re.captures(line).unwrap();
+        //let line = &caps["content"];
+        let caps = comment_re.captures(line);
+
+        let sline = match caps {
+            Some(cap) => cap["content"].to_string(),
+            None => line.to_string(),
+        };
+
+        let line = &sline;
+
         if tag_re.is_match(line) {
             let caps = tag_re.captures(line).unwrap();
 
