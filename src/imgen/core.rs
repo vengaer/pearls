@@ -1,4 +1,5 @@
 pub use crate::imgen::raw::SSIM;
+pub use cv::core::Scalar;
 
 use crate::imgen::{cmp, math};
 use crate::imgen::cmp::Weights;
@@ -6,7 +7,7 @@ use crate::imgen::color::SampleSpace;
 use crate::imgen::error::Error;
 use crate::imgen::math::{DensityEstimate, Point2u, Point3f, Size2u};
 use crate::imgen::raw;
-use cv::core::{CvType, LineType, Point2i, Rect, Scalar, Size2i};
+use cv::core::{CvType, LineType, Point2i, Rect, Size2i};
 use cv::highgui::{Show, WindowFlag, highgui_named_window};
 use cv::imgcodecs::ImageReadMode;
 use cv::imgproc::{ColorConversion, InterpolationFlag};
@@ -378,6 +379,7 @@ impl Image {
 
 
 
+    #[allow(dead_code)]
     pub fn reproduce(&mut self, 
                      section_size: Size2u, 
                      n_images: u32, 
@@ -563,6 +565,7 @@ pub struct Window {
 }
 
 impl Window {
+    #[allow(dead_code)]
     pub fn new(title: &str) -> Window {
         let title = title.to_string();
         let active = false;

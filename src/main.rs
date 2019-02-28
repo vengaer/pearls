@@ -11,7 +11,7 @@ fn main() {
     let min_dim = 100;
 
     let window = Window::new("Window1");
-    let mut img = Image::from_file("images/tree.jpg").unwrap();
+    let mut img = Image::from_file("images/image1.jpg").unwrap();
     
     img.clamp_size(max_dim, min_dim);
     //window.show(&img).expect("Could not show image");
@@ -20,7 +20,7 @@ fn main() {
                              100, 
                              Size2u::new(24, 24), 
                              Weights::new(1.0, 0.0).unwrap(),
-                             Filter::Sdev,
+                             Filter::None,
                              ExecutionPolicy::Parallellx4,
                              ImProc::None).unwrap();
     repr.to_file("images/out.jpg").unwrap();
