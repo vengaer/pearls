@@ -178,8 +178,8 @@ impl PearlImage {
 #[allow(dead_code)]
 pub enum ExecutionPolicy {
     Sequential,
-    Parallellx4,
-    Parallellx8,
+    Parallelx4,
+    Parallelx8,
 }
 
 #[derive(Debug)]
@@ -484,8 +484,8 @@ impl Image {
 
             _ => {
                 let nthreads = match policy {
-                    ExecutionPolicy::Parallellx4  => 4,
-                    ExecutionPolicy::Parallellx8  => {
+                    ExecutionPolicy::Parallelx4  => 4,
+                    ExecutionPolicy::Parallelx8  => {
                         eprintln!("Note: the benefits of running more than 4 threads are generally next to none.");
                         8
                     },

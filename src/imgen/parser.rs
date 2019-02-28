@@ -221,8 +221,8 @@ fn parse_filter(filter: &str) -> Result<Filter, Error> {
 fn parse_exec_policy(policy: &str) -> Result<ExecutionPolicy, Error> {
     match policy {
         "sequential" => Ok(ExecutionPolicy::Sequential),
-        "parallellx4" => Ok(ExecutionPolicy::Parallellx4),
-        "parallellx8" => Ok(ExecutionPolicy::Parallellx8),
+        "parallelx4" => Ok(ExecutionPolicy::Parallelx4),
+        "parallelx8" => Ok(ExecutionPolicy::Parallelx8),
         _ => Err(Error::new(&format!("{} is not an exection policy", policy))),
     }
 }
