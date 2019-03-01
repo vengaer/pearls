@@ -354,8 +354,7 @@ impl Image {
 
                 let x_orig_range = x as c_int / upscale.x as c_int..(x as c_int + image_size.x as c_int) / upscale.x as c_int;
 
-                let sub_img: Image;
-                sub_img = orig.subsection(&x_orig_range, &y_orig_range)
+                let mut sub_img = orig.subsection(&x_orig_range, &y_orig_range)
                                 .expect("Subsection boundaries out of range");
 
                 let mut opt: f32 = 1000000.0;
@@ -368,7 +367,10 @@ impl Image {
                     };
                     let mssim = match math::approx_eq(weights.ssim, 0.0) {
                         true  => 0.0,
-                        false => cmp::ssim_mean(&sub_img, &pearl.image).unwrap(),
+                        false => {
+                            sub_img.resize(pearl.image.data.rows as u32, pearl.image.data.cols as u32);
+                            cmp::ssim_mean(&sub_img, &pearl.image).unwrap()
+                        },
                     };
 
                     let diff = Image::compute_diff(eab, mssim, &weights);
