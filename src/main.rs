@@ -96,9 +96,9 @@ fn main() {
                              filter,
                              exec,
                              proc)
-                    .map_err(|error| {
-                        panic!("Fatal: {}", error.description());
-                    }).unwrap();
+        .map_err(|error| {
+            panic!("Fatal: {}", error.description());
+        }).unwrap();
 
     repr.to_file(&output).map_err(|error| {
         panic!("Fatal: {}", error.description());

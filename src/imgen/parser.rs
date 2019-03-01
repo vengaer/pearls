@@ -26,7 +26,7 @@ impl Tag {
             "io" => Ok(Tag::IO),
             "params" => Ok(Tag::Params),
             "visuals" => Ok(Tag::Visuals),
-            _ => Err(Error::new("Unknown tag")),
+            _ => Err(Error::new(&format!("Unknown tag {}", string))),
         }
     }
 }
@@ -86,16 +86,20 @@ impl ParseResult {
 
 #[allow(dead_code)]
 pub fn parse(config: &str) -> Result<ParseResult, Error> {
-    let contents = file_contents(config)?
-                    .to_lowercase();
+    let mut result = ParseResult::default();
+
+    let contents = file_contents(config).map_err(|_| {
+        return Ok(result);
+    })
+    .unwrap()
+    .to_lowercase();
+
     let mut tag = Tag::NoOpt;
 
     let tag_re     = Regex::new(r"^\[(?P<tag>\w+)\]").unwrap();
     let cont_re    = Regex::new(r"(?P<content>[\w\d., ]+)").unwrap();
     let path_re    = Regex::new(r"(?P<path>[/\w\d.]+)").unwrap();
     let comment_re = Regex::new(r"(?P<content>.*)#").unwrap();
-
-    let mut result = ParseResult::default();
 
     for line in contents.lines() {
         /* Strip comments */
