@@ -12,9 +12,18 @@ use std::error::Error;
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() > 2 {
-        eprintln!("Warning: only a single command line argument supported, the rest will be ignored");
-    }
+    let input_idx = args
+        .iter()
+        .enumerate()
+        .find(|&e| e.1.to_string() ==  "-i")
+        .map_or(args.len() + 1, |e| e.0 + 1);
+
+    let output_idx = args
+        .iter()
+        .enumerate()
+        .find(|&e| e.1.to_string() == "-o")
+        .map_or(args.len() + 1, |e| e.0 + 1);
+
 
     let max_dim = 1000;
     let min_dim = 100;
@@ -23,17 +32,23 @@ fn main() {
         panic!("Fatal: {}", error.description());
     }).unwrap();
 
-    let input = match args.len() {
-        len if len > 1 => &args[1],
+    let input = match input_idx {
+        len if len < args.len() => &args[input_idx],
         _ => { 
             if pres.input.is_empty() {
                 panic!("Fatal: input file not specified neither in config.toml or from command line");
             };
             &pres.input
         },
+
     };
 
-    let output   = pres.output;
+    let output = match output_idx {
+        len if len < args.len() => &args[output_idx],
+        _ => &pres.output,
+
+    };
+
     let subsize  = pres.subsize;
     let ncolors  = pres.ncolors;
     let circsize = pres.circsize;

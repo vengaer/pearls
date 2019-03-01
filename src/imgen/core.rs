@@ -41,12 +41,12 @@ impl Image {
         let data = match data {
             Ok(data) => data,
             Err(_error) => {
-                return Err(Error::new("Could not find file"));
+                return Err(Error::new(&format!("Error reading {}", path)));
             },
         };
 
         if !data.is_valid() {
-            Err(Error::new("Invalid image"))
+            Err(Error::new(&format!("Could not read file {}", path)))
         }
         else {
             Ok(Image{data})
@@ -402,21 +402,21 @@ impl Image {
                      proc: PostProc) 
                      -> Result<Image, Error> {
 
-        if section_size.x > self.data.cols as u32 || 
-           section_size.y > self.data.rows as u32 {
-            return Err(Error::new("Invalid sub section dims"));
+        if section_size.x > 16 || 
+           section_size.y > 16 {
+            return Err(Error::new("Sub-images may be at most 16x16"));
         }
         else if section_size.x != section_size.y {
             return Err(Error::new("Section must be nxn"));
         }
         else if image_size.x < section_size.x {
-            return Err(Error::new("Image size must be larger than section size"));
+            return Err(Error::new("Circle size must be larger than section size"));
         }
         else if n_images < 7 {
-            return Err(Error::new("Must request at least 7 images"));
+            return Err(Error::new("Cannot reproduce image with fewer than 7 colors"));
         }
         else if n_images > 200 {
-            return Err(Error::new("Too many images requested"));
+            return Err(Error::new("Too many circles requested"));
         }
         else if image_size.x != image_size.y {
             return Err(Error::new("Replacement images must be nxn"))

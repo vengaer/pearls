@@ -3,9 +3,15 @@
 # is available for a certain choice they are listed in comments on 
 # the same line.
 
+# input and output may also be specified from command line by passing
+# the -i and -o flags repectively. E.g.
+# pearls -i path/to/input/image -o path/to/output/image
+# If an argument is passed from command line, this is preferred over 
+# the contents of this file.
+
 [io]
-input = "images/image1.jpg"
-output = "images/out.jpg"
+input = "images/landscape.jpg"
+output = "images/landscape_out.jpg"
 
 [params]
 subsize = "4x4"
