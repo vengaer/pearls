@@ -1,3 +1,8 @@
+# Config file
+# Parsing is case insensitive. If a limited number of options 
+# is available for a certain choice they are listed in comments on 
+# the same line.
+
 [io]
 input = "images/image1.jpg"
 output = "images/out.jpg"

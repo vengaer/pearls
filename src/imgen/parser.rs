@@ -70,10 +70,10 @@ impl ParseResult {
     fn default() -> ParseResult {
         ParseResult {
             input: "".to_string(),
-            output: "".to_string(),
-            subsize: Size2u::new(0,0),
-            ncolors: 0,
-            circsize: Size2u::new(0,0),
+            output: "images/out.jpg".to_string(),
+            subsize: Size2u::new(4,4),
+            ncolors: 100,
+            circsize: Size2u::new(24,24),
             weights: Weights::new(1.0, 0.0).unwrap(),
             filter: Filter::None,
             exec: ExecutionPolicy::Sequential,
@@ -90,17 +90,15 @@ pub fn parse(config: &str) -> Result<ParseResult, Error> {
                     .to_lowercase();
     let mut tag = Tag::NoOpt;
 
-    let tag_re = Regex::new(r"^\[(?P<tag>\w+)\]").unwrap();
-    let cont_re = Regex::new(r"(?P<content>[\w\d., ]+)").unwrap();
-    let path_re = Regex::new(r"(?P<path>[/\w\d.]+)").unwrap();
+    let tag_re     = Regex::new(r"^\[(?P<tag>\w+)\]").unwrap();
+    let cont_re    = Regex::new(r"(?P<content>[\w\d., ]+)").unwrap();
+    let path_re    = Regex::new(r"(?P<path>[/\w\d.]+)").unwrap();
     let comment_re = Regex::new(r"(?P<content>.*)#").unwrap();
 
     let mut result = ParseResult::default();
 
     for line in contents.lines() {
         /* Strip comments */
-        //let caps = comment_re.captures(line).unwrap();
-        //let line = &caps["content"];
         let caps = comment_re.captures(line);
 
         let sline = match caps {
