@@ -24,11 +24,22 @@ fn main() {
         .find(|&e| e.1.to_string() == "-o")
         .map_or(args.len() + 1, |e| e.0 + 1);
 
+    let config_idx = args
+        .iter()
+        .enumerate()
+        .find(|&e| e.1.to_string() == "-c")
+        .map_or(args.len() + 1, |e| e.0 + 1);
+
+    let config = match config_idx {
+        len if len < args.len() => &args[config_idx],
+        _ => "config.toml",
+    };
+
 
     let max_dim = 1000;
     let min_dim = 100;
 
-    let pres = parser::parse("config.toml").map_err(|error| {
+    let pres = parser::parse(config).map_err(|error| {
         panic!("Fatal: {}", error.description());
     }).unwrap();
 
