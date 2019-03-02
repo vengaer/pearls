@@ -71,6 +71,8 @@ fn main() {
 
     let mut window = Window::new("Window");
 
+    println!("Reading input file {}", input);
+
     let mut img = Image::from_file(&input).map_err(|error| {
         panic!("Fatal: {}", error.description());
     }).unwrap();
@@ -99,6 +101,8 @@ fn main() {
         .map_err(|error| {
             panic!("Fatal: {}", error.description());
         }).unwrap();
+
+    println!("Saving result to file {}", output);
 
     repr.to_file(&output).map_err(|error| {
         panic!("Fatal: {}", error.description());

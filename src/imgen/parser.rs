@@ -88,11 +88,10 @@ impl ParseResult {
 pub fn parse(config: &str) -> Result<ParseResult, Error> {
     let mut result = ParseResult::default();
 
-    let contents = file_contents(config).map_err(|_| {
-        return Ok(result);
-    })
-    .unwrap()
-    .to_lowercase();
+    let contents = match file_contents(config) {
+        Err(_) => return Ok(result),
+        Ok(data) => data.to_lowercase(),
+    };
 
     let mut tag = Tag::NoOpt;
 
