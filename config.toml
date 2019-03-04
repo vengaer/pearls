@@ -18,7 +18,7 @@ subsize = "4x4"
 ncolors = "100"
 circsize = "24x24"
 weights = "1.0, 0.0"
-filter = "none" 		# Options: none, sdev
+filter = "sdev" 		# Options: none, sdev
 exec = "parallelx4"		# Options: sequential, parallelx4, parallelx8
 postproc = "none"		# Options: none, origsize
 
