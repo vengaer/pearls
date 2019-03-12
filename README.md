@@ -28,4 +28,4 @@ Options may be specified in a .toml file. See the config.toml file in the projec
   
 
 ## Credits
-Images courtesy of Wikimedia Commons and Pexel.
+Images courtesy of Wikimedia Commons and Pexels.
