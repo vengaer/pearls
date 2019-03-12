@@ -23,7 +23,7 @@ Options may be specified in a .toml file. See the config.toml file in the projec
 ![](images/landscape_filtered_out.jpg)
 
 ## Common Issues
-- OpenCV is installed but <opencv2/opencv.hpp> is not found.
+- OpenCV is installed but <opencv2/opencv.hpp> is not found.  
   Make sure that opencv2 is in your include path. As an example, Pacman installs OpenCV to /usr/include/opencv4/opencv2 rather than the conventional /usr/include/opencv2. The easiest way to fix this is to create a symlink using `sudo ln -s /usr/include/opencv4/opencv2 /usr/include/opencv2`.
   
 
