@@ -2,9 +2,12 @@
 Image reproduction using smaller pearl-like images
 
 ## Results
-Original                  | Nonfiltered                            | Filtered
--------------------------:|:--------------------------------------:|:-------------------------------------:
-![](images/landscape.jpg) | ![](images/landscape_non_filtered.jpg) | ![](images/landscape_filtered_out.jpg)
+### Original
+![](images/landscape.jpg)
+### Non-filtered
+![](images/landscape_non_filtered_out.jpg)
+### Filtered
+![](images/landscape_filtered_out.jpg)
 
 ## Credits
 Images courtesy of Wikimedia Commons and Pexel.
