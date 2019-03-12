@@ -1,5 +1,5 @@
 # Pearls
-Image reproduction using smaller pearl-like images.
+Image reproduction using smaller pearl-like images. The program reads an image from the disk, generates an number of colored, hollow circles and uses them to reprocue the original image. Written as part of the course TNM097 Image Reproduction and Image Quality at Linköping University.
 
 ## Dependencies
 - [OpenCV](https://opencv.org)
