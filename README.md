@@ -28,5 +28,5 @@ Options may be specified in a .toml file. See the config.toml file in the projec
   
 
 ## Credits
-Images courtesy of Wikimedia Commons and Pexels.
-Github users nebgnahz, Pzixel, Restioson, yuvallanger, joelgallant, oefd, AgustinCB and peahonen for [cv-rs](https://github.com/nebgnahz/cv-rs)
+Images courtesy of Wikimedia Commons and Pexels.  
+Thanks to Github users nebgnahz, Pzixel, Restioson, yuvallanger, joelgallant, oefd, AgustinCB and peahonen for [cv-rs](https://github.com/nebgnahz/cv-rs)
