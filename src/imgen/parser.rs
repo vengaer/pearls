@@ -142,22 +142,22 @@ pub fn parse(config: &str) -> Result<ParseResult, Error> {
             };
 
             match comps[0].trim() {
-                "input" => result.input = val,
-                "output" => result.output = val,
-                "subsize" => result.subsize = parse_size2u(&val)?,
-                "ncolors" => {
+                "input"    => result.input    = val,
+                "output"   => result.output   = val,
+                "subsize"  => result.subsize  = parse_size2u(&val)?,
+                "ncolors"  => {
                     result.ncolors = match val.parse::<u32>() {
                         Ok(num) => num,
-                        Err(_) => return Err(Error::new(&format!("{} is not a u32", val))),
+                        Err(_)  => return Err(Error::new(&format!("{} is not a u32", val))),
                     };
                 },
                 "circsize" => result.circsize = parse_size2u(&val)?,
-                "weights" => result.weights = parse_weights(&val)?,
-                "filter" => result.filter = parse_filter(&val)?,
-                "exec" => result.exec = parse_exec_policy(&val)?,
+                "weights"  => result.weights  = parse_weights(&val)?,
+                "filter"   => result.filter   = parse_filter(&val)?,
+                "exec"     => result.exec     = parse_exec_policy(&val)?,
                 "postproc" => result.postproc = parse_postproc(&val)?,
-                "show" => result.show = Show::from_str(&val)?,
-                _ => return Err(Error::new(&format!("Unknown key: {}", comps[0]))),
+                "show"     => result.show     = Show::from_str(&val)?,
+                _          => return Err(Error::new(&format!("Unknown key: {}", comps[0]))),
             };
         }
 
