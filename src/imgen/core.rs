@@ -497,10 +497,7 @@ impl Image {
             _ => {
                 let nthreads = match policy {
                     ExecutionPolicy::Parallelx4  => 4,
-                    ExecutionPolicy::Parallelx8  => {
-                        eprintln!("Note: the benefits of running more than 4 threads are generally next to none.");
-                        8
-                    },
+                    ExecutionPolicy::Parallelx8  => 8,
                     _ => return Err(Error::new("Unknown execution policy")),
                 };
 
