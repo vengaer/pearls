@@ -2,7 +2,8 @@ image: archlinux/base:latest
 
 before_script:
     - pacman --noconfirm -Syu
-    - pacman --noconfirm -S rust
+    - pacman --noconfirm -S rust opencv
+    - ln -s /usr/include/opencv4/opencv2 /usr/include/opencv2
 
 stages:
     - build
