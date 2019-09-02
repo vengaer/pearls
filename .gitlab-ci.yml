@@ -1,0 +1,16 @@
+image: archlinux/base:latest
+
+before_script:
+    - pacman --noconfirm -Syu
+    - pacman --noconfirm -S rust
+
+stages:
+    - build
+
+cargo_build:
+    stage: build
+    script:
+    - cargo build
+    artifacts:
+        paths:
+        - pearls
