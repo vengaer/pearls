@@ -16,4 +16,4 @@ cargo_build:
     - cargo build
     artifacts:
         paths:
-        - pearls
+        - target/debug/pearls
