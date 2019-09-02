@@ -2,7 +2,7 @@ image: archlinux/base:latest
 
 before_script:
     - pacman --noconfirm -Syu
-    - pacman --noconfirm -S rust opencv
+    - pacman --noconfirm -S rust opencv gcc
     - ln -s /usr/include/opencv4/opencv2 /usr/include/opencv2
 
 stages:
@@ -11,6 +11,8 @@ stages:
 cargo_build:
     stage: build
     script:
+    - export CC=gcc
+    - export CXX=g++
     - cargo build
     artifacts:
         paths:
