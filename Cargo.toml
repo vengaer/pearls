@@ -5,6 +5,9 @@ authors = ["Vilhelm Engström <vilhelm.engstrom@tuta.io>"]
 edition = "2018"
 build = "build.rs"
 
+[profile.release]
+opt-level = 3
+
 [build-dependencies]
 cc="*"
 
